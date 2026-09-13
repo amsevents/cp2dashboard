@@ -189,6 +189,12 @@ async function fetchAging() {
         Start: twoYearsAgo.toISOString(),
         End: now.toISOString(),
       },
+      // Alvys requires at least one of Status/PONumbers/CustomerId/LoadNumbers/
+      // OrderNumbers to be non-empty (confirmed via a live validation error).
+      // "Open" is a first guess at their invoice status enum — if this is
+      // wrong, Alvys's own error message will very likely list the exact
+      // valid values, which we can then swap in here.
+      Status: ["Open"],
     });
     console.log("Alvys /invoices/search raw response sample:", JSON.stringify(data).slice(0, 1000));
 
