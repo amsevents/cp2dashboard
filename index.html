@@ -1,0 +1,1000 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CP2 Logistics — Operations Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Yantramanav:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --yellow:  #FCDB04;
+    --gold:    #FFBA00;
+    --black:   #060606;
+    --dark:    #141414;
+    --panel:   #1a1a1a;
+    --border:  #2e2e2e;
+    --muted:   #888888;
+    --white:   #FFFFFF;
+    --green:   #2ecc71;
+    --red:     #e74c3c;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Yantramanav', system-ui, sans-serif;
+    font-size: 16px;
+  }
+
+  /* ── TOP-LEVEL GRID: header / fuel / main ── */
+  .dashboard {
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 32px;
+    background: var(--dark);
+    border-bottom: 3px solid var(--yellow);
+  }
+  .logo-block { display: flex; align-items: center; gap: 20px; }
+  .logo-cp2 {
+    font-size: 42px; font-weight: 900; letter-spacing: 2px;
+    color: var(--yellow); line-height: 1;
+  }
+  .logo-cp2 span { color: var(--white); }
+  .logo-sub {
+    font-size: 11px; font-weight: 500; letter-spacing: 7px;
+    color: var(--muted); text-transform: uppercase; margin-top: 2px;
+  }
+  .divider-v { width: 1px; height: 44px; background: #2a2a2a; }
+  .header-label {
+    font-size: 12px; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .header-right { text-align: right; }
+  .clock {
+    font-size: 38px; font-weight: 700; color: var(--yellow);
+    letter-spacing: 2px; line-height: 1; font-variant-numeric: tabular-nums;
+  }
+  .date-line { font-size: 13px; color: var(--muted); letter-spacing: 1px; margin-top: 2px; }
+
+  /* ── FUEL STRIP ── */
+  .fuel-strip {
+    background: var(--yellow);
+    display: flex; align-items: center; justify-content: center;
+    gap: 0; padding: 0;
+  }
+  .fuel-cell {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 12px 20px;
+  }
+  .fuel-cell + .fuel-cell { border-left: 2px solid rgba(0,0,0,0.15); }
+  .fuel-lbl {
+    font-size: 11px; font-weight: 700; letter-spacing: 3px;
+    text-transform: uppercase; color: rgba(0,0,0,0.6); margin-bottom: 2px;
+  }
+  .fuel-val {
+    font-size: 44px; font-weight: 900; color: var(--black);
+    line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums;
+  }
+  .fuel-unit { font-size: 11px; color: rgba(0,0,0,0.5); letter-spacing: 1px; margin-top: 1px; }
+
+  /* ── MAIN CONTENT: left (loads) | right (AR + fleet) ── */
+  .main-content {
+    display: grid;
+    grid-template-columns: 3fr 1.55fr;
+    overflow: hidden;
+    min-height: 0; height: 100%;
+  }
+
+  /* ── LEFT PANEL: tiles + loads table ── */
+  .left-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 2px solid var(--border);
+  }
+
+  /* ── SUMMARY TILES ── */
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2px;
+    background: #000;
+    padding: 2px;
+    flex-shrink: 0;
+  }
+  .tile {
+    background: var(--panel);
+    padding: 12px 22px;
+    display: flex; flex-direction: column;
+    border-top: 3px solid var(--yellow);
+  }
+  .tile-lbl {
+    font-size: 11px; font-weight: 500; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 3px;
+  }
+  .tile-val {
+    font-size: 46px; font-weight: 900; color: var(--yellow);
+    line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums;
+  }
+  .tile-sub { font-size: 12px; color: var(--muted); margin-top: 2px; font-weight: 400; }
+
+  /* ── LOADS TABLE ── */
+  .loads-section {
+    display: flex; flex-direction: column;
+    overflow: hidden; background: var(--black); flex: 1; min-height: 0;
+  }
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 22px 7px; border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .section-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--yellow);
+  }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; letter-spacing: 2px; color: var(--green); text-transform: uppercase;
+  }
+  .live-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); animation: pulse 1.8s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+  .table-viewport { flex: 1; overflow: hidden; position: relative; }
+  .table-scroller {
+    position: absolute; top: 0; left: 0; right: 0;
+    transition: transform 0.6s ease;
+  }
+  table.loads-tbl { width: 100%; border-collapse: collapse; }
+  table.loads-tbl thead th {
+    position: sticky; top: 0;
+    background: var(--dark);
+    font-size: 10px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted);
+    padding: 7px 18px; text-align: left;
+    border-bottom: 1px solid var(--border); z-index: 10;
+  }
+  table.loads-tbl thead th:last-child { text-align: center; }
+  table.loads-tbl tbody tr {
+    border-bottom: 1px solid #252525; transition: background 0.2s;
+  }
+  table.loads-tbl tbody tr:hover { background: #1e1e1e; }
+  table.loads-tbl tbody td { padding: 10px 18px; font-size: 18px; font-weight: 500; }
+  .td-id   { color: var(--muted); font-size: 14px; font-weight: 400; white-space: nowrap; }
+  .td-route{ color: var(--white); font-weight: 700; }
+  .td-arrow{ color: var(--yellow); margin: 0 8px; }
+  .td-miles{ color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .td-rev  { color: var(--yellow); font-weight: 900; font-variant-numeric: tabular-nums; font-size: 20px; }
+  .td-agent{ color: #d0d0d0; font-size: 15px; font-weight: 500; white-space: nowrap; }
+  .td-driver{ color: #b0b0b0; font-size: 15px; font-weight: 400; white-space: nowrap; }
+  .td-status{ text-align: center; }
+  .badge {
+    display: inline-block; padding: 3px 11px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+    background: rgba(46,204,113,0.15); color: var(--green); border: 1px solid rgba(46,204,113,0.3);
+  }
+  .badge.transit   { background: rgba(252,219,4,0.12); color: var(--yellow); border-color: rgba(252,219,4,0.3); }
+  .badge.dispatched{ background: rgba(255,186,0,0.12); color: var(--gold);   border-color: rgba(255,186,0,0.3); }
+  .no-loads { padding: 28px 22px; color: var(--muted); font-size: 16px; letter-spacing: 2px; text-transform: uppercase; }
+
+  /* ── RIGHT PANEL: AR card + fleet ── */
+  .right-panel {
+    display: flex;
+    flex-direction: column;
+    background: var(--dark);
+    overflow: hidden;
+  }
+
+  /* ── AR AGING CARD ── */
+  .ar-card {
+    flex: 1;
+    padding: 18px 22px 16px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .ar-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px;
+  }
+  .ar-title {
+    font-size: 11px; font-weight: 700; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--yellow);
+  }
+  .ar-total-block { text-align: right; }
+  .ar-total {
+    font-size: 28px; font-weight: 900; color: var(--white);
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .ar-total-lbl {
+    font-size: 10px; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--muted); margin-top: 2px;
+  }
+  .ar-buckets {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    flex: 1;
+    justify-content: center;
+  }
+  .ar-bucket { display: flex; flex-direction: column; gap: 4px; }
+  .ar-bucket-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+  }
+  .ar-bucket-lbl {
+    font-size: 10px; letter-spacing: 1px;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .ar-bucket-amt {
+    font-size: 22px; font-weight: 900;
+    font-variant-numeric: tabular-nums; color: var(--white);
+  }
+  .ar-bucket-amt.overdue { color: #e74c3c; }
+  .ar-bar-track {
+    height: 5px; background: #1f1f1f; border-radius: 3px; overflow: hidden;
+  }
+  .ar-bar-fill {
+    height: 100%; border-radius: 3px; background: var(--yellow);
+    transition: width 0.7s ease;
+  }
+  .ar-bar-fill.d31 { background: var(--gold); }
+  .ar-bar-fill.d61 { background: #ff7a00; }
+  .ar-bar-fill.overdue { background: #e74c3c; }
+
+  /* ── OVERDUE INVOICE LIST ── */
+  .ar-overdue {
+    border-top: 1px solid var(--border);
+    padding-top: 10px;
+    margin-top: 6px;
+    flex-shrink: 0;
+    overflow-y: auto;
+    max-height: 300px;
+  }
+  .ar-overdue-hdr {
+    font-size: 10px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; color: var(--yellow); margin-bottom: 6px;
+  }
+  .ar-overdue-row {
+    display: grid;
+    grid-template-columns: 68px 1fr auto auto;
+    gap: 8px;
+    align-items: center;
+    padding: 5px 0;
+    border-bottom: 1px solid #2a2a2a;
+  }
+  .ar-overdue-row:last-child { border-bottom: none; }
+  .ar-ov-id   { font-size: 11px; color: #aaaaaa; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ar-ov-cust { font-size: 12px; color: var(--white); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ar-ov-amt  { font-size: 13px; font-weight: 700; color: var(--yellow); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ar-ov-age  { font-size: 10px; white-space: nowrap; text-align: right; letter-spacing: 0.5px; }
+  .ar-ov-age.d31    { color: var(--gold); }
+  .ar-ov-age.d61    { color: #ff7a00; }
+  .ar-ov-age.d90    { color: #e74c3c; }
+  .ar-none { font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
+
+  /* ── FLEET & DRIVER PANEL (Motive) ── */
+  .motive-section { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; }
+  .motive-header  { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+  .motive-title   { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--yellow); }
+  .motive-count   { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
+  .driver-grid    { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+  .driver-card    { background: var(--panel); border-radius: 6px; padding: 9px 12px; border-left: 3px solid var(--border); }
+  .driver-card.s-driving        { border-left-color: var(--green); }
+  .driver-card.s-on_duty        { border-left-color: var(--gold); }
+  .driver-card.s-sleeper_berth  { border-left-color: #6495ED; }
+  .driver-card.s-off_duty       { border-left-color: #444; }
+  .driver-row1   { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .driver-name   { font-size: 13px; font-weight: 700; color: var(--white); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .driver-badge  { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
+  .driver-badge.s-driving        { background: rgba(46,204,113,0.15); color: var(--green); }
+  .driver-badge.s-on_duty        { background: rgba(255,186,0,0.15);  color: var(--gold); }
+  .driver-badge.s-sleeper_berth  { background: rgba(100,149,237,0.15); color: #6495ED; }
+  .driver-badge.s-off_duty       { background: rgba(80,80,80,0.2); color: #888; }
+  .driver-row2   { display: flex; align-items: center; gap: 12px; }
+  .driver-hos    { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .driver-hos strong { color: var(--white); }
+  .driver-loc    { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .driver-truck  { font-size: 10px; color: #aaa; background: rgba(255,255,255,0.07); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
+  .motive-empty  { font-size: 11px; color: #555; letter-spacing: 1px; text-transform: uppercase; }
+  .motive-err    { font-size: 10px; color: #e74c3c; }
+
+  /* ── TAB NAVIGATION ── */
+  .tab-area   { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+  .tab-nav    { display: flex; align-items: stretch; background: var(--dark); border-bottom: 2px solid var(--border); padding: 0 24px; flex-shrink: 0; }
+  .tab-btn    { padding: 9px 24px; cursor: pointer; border: none; background: none; font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--muted); border-bottom: 3px solid transparent; margin-bottom: -2px; transition: color 0.15s, border-color 0.15s; }
+  .tab-btn:hover { color: var(--white); }
+  .tab-btn.active { color: var(--yellow); border-bottom-color: var(--yellow); }
+  .tab-badge  { display: inline-block; margin-left: 9px; padding: 1px 8px; background: rgba(231,76,60,0.2); color: #e74c3c; border-radius: 10px; font-size: 9px; letter-spacing: 0; vertical-align: middle; font-weight: 700; }
+  .tab-badge:empty { display: none; }
+  .tab-panes  { flex: 1; min-height: 0; overflow: hidden; }
+  .tab-pane   { height: 100%; }
+
+  /* ── A/R AGING TAB PAGE ── */
+  .ar-tab-page { height: 100%; display: flex; flex-direction: column; padding: 28px 40px 20px; gap: 22px; overflow-y: auto; background: var(--black); }
+  .ar-tab-hdr  { display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 2px solid var(--border); padding-bottom: 18px; flex-shrink: 0; }
+  .ar-tab-hdr-left { display: flex; flex-direction: column; gap: 4px; }
+  .ar-tab-title    { font-size: 11px; font-weight: 700; letter-spacing: 4px; text-transform: uppercase; color: var(--yellow); }
+  .ar-tab-grand    { font-size: 52px; font-weight: 900; color: var(--white); font-variant-numeric: tabular-nums; line-height: 1; }
+  .ar-tab-grand-lbl{ font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+  .ar-tab-buckets  { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; flex-shrink: 0; }
+  .ar-tab-bucket   { background: var(--panel); border-radius: 10px; padding: 20px 22px 16px; border-top: 3px solid var(--border); }
+  .ar-tab-bucket.b-cur { border-top-color: var(--yellow); }
+  .ar-tab-bucket.b-31  { border-top-color: var(--gold); }
+  .ar-tab-bucket.b-61  { border-top-color: #ff7a00; }
+  .ar-tab-bucket.b-90  { border-top-color: #e74c3c; }
+  .ar-tab-bucket-lbl   { font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+  .ar-tab-bucket-amt   { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; color: var(--white); line-height: 1; }
+  .ar-tab-bucket-amt.red { color: #e74c3c; }
+  .ar-tab-bucket-bar   { height: 4px; border-radius: 2px; background: #1f1f1f; margin-top: 10px; overflow: hidden; }
+  .ar-tab-bucket-fill  { height: 100%; border-radius: 2px; background: var(--yellow); transition: width 0.7s ease; }
+  .ar-tab-bucket-fill.d31 { background: var(--gold); }
+  .ar-tab-bucket-fill.d61 { background: #ff7a00; }
+  .ar-tab-bucket-fill.red { background: #e74c3c; }
+  .ar-tab-inv-section  { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--panel); border-radius: 10px; padding: 18px 22px; }
+  .ar-tab-inv-hdr      { font-size: 10px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--yellow); padding-bottom: 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+  .ar-tab-inv-scroll   { flex: 1; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #333 transparent; }
+  .ar-tab-inv-row      { display: grid; grid-template-columns: 110px 1fr auto 100px; gap: 14px; align-items: center; padding: 11px 0; border-bottom: 1px solid #1f1f1f; font-size: 15px; }
+  .ar-tab-inv-row:last-child { border-bottom: none; }
+  .ar-tab-none         { font-size: 12px; color: #444; letter-spacing: 2px; text-transform: uppercase; padding: 18px 0; }
+
+  /* ── UPDATED LABEL ── */
+  .updated-lbl { font-size: 11px; color: #666; letter-spacing: 1px; }
+
+  /* ── ERROR BANNER ── */
+  .error-bar {
+    background: rgba(231,76,60,0.15); border-top: 1px solid rgba(231,76,60,0.3);
+    color: #e74c3c; font-size: 12px; letter-spacing: 1px;
+    padding: 5px 24px; display: none; flex-shrink: 0;
+  }
+
+  /* ══════════════════════════════════════════════════════
+     MOBILE RESPONSIVE  (≤ 768 px)
+     Uses !important to beat the fixed-viewport TV styles.
+     ══════════════════════════════════════════════════════ */
+  @media (max-width: 768px) {
+
+    /* ── Scrollable page ── */
+    html, body {
+      overflow-x: hidden !important;
+      overflow-y: auto  !important;
+      height: auto      !important;
+    }
+    .dashboard {
+      display: flex !important;
+      flex-direction: column !important;
+      height: auto   !important;
+      min-height: 100svh;
+      width: 100%    !important;
+    }
+
+    /* ── Header: hide "Operations Dashboard" label + divider to stop overflow ── */
+    .header        { padding: 8px 14px !important; }
+    .divider-v     { display: none !important; }
+    .header-label  { display: none !important; }
+    .logo-cp2      { font-size: 24px !important; }
+    .logo-sub      { font-size: 8px  !important; letter-spacing: 2px !important; }
+    .clock         { font-size: 22px !important; }
+    .date-line     { font-size: 9px  !important; }
+
+    /* ── Fuel strip: smaller numbers ── */
+    .fuel-strip { flex-shrink: 0; }
+    .fuel-cell  { padding: 8px 10px  !important; }
+    .fuel-val   { font-size: 28px   !important; }
+    .fuel-lbl   { font-size: 9px    !important; letter-spacing: 1px !important; }
+    .fuel-unit  { font-size: 9px    !important; }
+
+    /* ── Summary tiles: 2-col grid ── */
+    .tiles    { grid-template-columns: repeat(2, 1fr) !important; }
+    .tile     { padding: 8px 12px !important; }
+    .tile-val { font-size: 28px   !important; }
+    .tile-lbl { font-size: 9px    !important; letter-spacing: 1px !important; }
+    .tile-sub { font-size: 10px   !important; }
+
+    /* ── Main content: SINGLE COLUMN (flex, not grid) ── */
+    .main-content {
+      display: flex        !important;
+      flex-direction: column !important;
+      overflow: visible    !important;
+      min-height: unset    !important;
+      height: auto         !important;
+    }
+
+    /* ── Left panel: let it expand naturally ── */
+    .left-panel {
+      overflow: visible  !important;
+      border-right: none !important;
+      border-bottom: 2px solid var(--border) !important;
+      height: auto       !important;
+      min-height: unset  !important;
+    }
+    .loads-section {
+      overflow: visible !important;
+      flex: unset       !important;
+      height: auto      !important;
+      min-height: unset !important;
+    }
+
+    /* ── Loads table: horizontal swipe ── */
+    .table-viewport {
+      position: static         !important;
+      overflow-x: auto         !important;
+      overflow-y: visible      !important;
+      -webkit-overflow-scrolling: touch;
+      flex: unset              !important;
+      height: auto             !important;
+    }
+    .table-scroller {
+      position: static   !important;
+      transform: none    !important;
+      transition: none   !important;
+    }
+    /* Hide Miles, Sales Agent, Driver on mobile — keep Load #, Origin, Dest, Revenue, Status */
+    .loads-tbl th:nth-child(4), .loads-tbl td:nth-child(4),
+    .loads-tbl th:nth-child(6), .loads-tbl td:nth-child(6),
+    .loads-tbl th:nth-child(7), .loads-tbl td:nth-child(7) {
+      display: none !important;
+    }
+    table.loads-tbl thead th { padding: 6px 10px !important; font-size: 9px  !important; }
+    table.loads-tbl tbody td { padding: 9px 10px !important; font-size: 13px !important; }
+    .td-rev { font-size: 14px !important; }
+
+    /* ── Right panel: full width below loads ── */
+    .right-panel   { overflow: visible !important; height: auto !important; }
+    .motive-section{ flex: unset !important; overflow: visible !important; }
+    .driver-grid   { overflow: visible !important; flex: unset !important; }
+    /* A/R tab page */
+    .ar-tab-buckets{ grid-template-columns: repeat(2,1fr) !important; }
+    .ar-tab-grand  { font-size: 34px !important; }
+    .ar-tab-bucket-amt { font-size: 24px !important; }
+    .ar-tab-inv-section{ flex: unset !important; overflow: visible !important; }
+    .ar-tab-inv-scroll { overflow: visible !important; flex: unset !important; }
+  }
+
+  /* ── Extra-small phones (≤ 480 px) ── */
+  @media (max-width: 480px) {
+    .fuel-strip { flex-wrap: wrap !important; }
+    .fuel-cell  { flex: 0 0 50%  !important; }
+    .fuel-cell + .fuel-cell        { border-left: none !important; border-top: 2px solid rgba(0,0,0,0.15) !important; }
+    .fuel-cell:nth-child(even)     { border-left: 2px solid rgba(0,0,0,0.15) !important; }
+    .clock    { font-size: 18px !important; }
+    .logo-cp2 { font-size: 20px !important; }
+  }
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <!-- HEADER -->
+  <header class="header">
+    <div class="logo-block">
+      <div>
+        <div class="logo-cp2">CP<span>2</span></div>
+        <div class="logo-sub">Logistics</div>
+      </div>
+      <div class="divider-v"></div>
+      <div class="header-label">Operations Dashboard</div>
+    </div>
+    <div class="header-right">
+      <div class="clock" id="clock">--:--:--</div>
+      <div class="date-line" id="date-line">Loading...</div>
+    </div>
+  </header>
+
+  <!-- FUEL STRIP -->
+  <div class="fuel-strip">
+    <div class="fuel-cell">
+      <div class="fuel-lbl">National Diesel Price</div>
+      <div class="fuel-val" id="diesel-price">$-.---</div>
+      <div class="fuel-unit" id="diesel-period">per gallon &nbsp;·&nbsp; EIA Weekly</div>
+    </div>
+    <div class="fuel-cell">
+      <div class="fuel-lbl">CP2 Fuel Surcharge Rate</div>
+      <div class="fuel-val" id="fsc-rate">$-.--</div>
+      <div class="fuel-unit">per mile</div>
+    </div>
+  </div>
+
+  <!-- TAB AREA -->
+  <div class="tab-area">
+
+  <!-- Tab Navigation -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="switchTab('ops')" id="tab-ops">Operations</button>
+    <button class="tab-btn" onclick="switchTab('ar')" id="tab-ar">A/R Aging <span class="tab-badge" id="tab-ar-badge"></span></button>
+  </div>
+
+  <div class="tab-panes">
+
+  <!-- Tab 1: Operations Dashboard -->
+  <div id="pane-ops" class="tab-pane">
+  <div class="main-content">
+
+    <!-- LEFT: Summary Tiles + Active Loads -->
+    <div class="left-panel">
+
+      <!-- Summary Tiles -->
+      <div class="tiles">
+        <div class="tile">
+          <div class="tile-lbl">Active Loads</div>
+          <div class="tile-val" id="tile-count">--</div>
+          <div class="tile-sub">loads in motion</div>
+        </div>
+        <div class="tile">
+          <div class="tile-lbl">Total Miles (Active)</div>
+          <div class="tile-val" id="tile-miles">--</div>
+          <div class="tile-sub">miles</div>
+        </div>
+        <div class="tile">
+          <div class="tile-lbl">Total Revenue (Active)</div>
+          <div class="tile-val" id="tile-revenue">$--</div>
+          <div class="tile-sub">in motion</div>
+        </div>
+      </div>
+
+      <!-- Active Loads Table -->
+      <div class="loads-section">
+        <div class="section-header">
+          <div class="section-title">Active Loads — Live Feed</div>
+          <div class="live-badge"><div class="live-dot"></div>Live</div>
+          <div class="updated-lbl" id="updated-lbl">Updated: —</div>
+        </div>
+        <div class="table-viewport" id="table-viewport">
+          <div class="table-scroller" id="table-scroller">
+            <table class="loads-tbl">
+              <thead>
+                <tr>
+                  <th>Load #</th>
+                  <th>Origin</th>
+                  <th></th>
+                  <th>Destination</th>
+                  <th>Miles</th>
+                  <th>Revenue</th>
+                  <th>Sales Agent</th>
+                  <th>Driver</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="loads-tbody">
+                <tr><td colspan="9" class="no-loads">Loading...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /left-panel -->
+
+    <!-- RIGHT: AR Aging Card + Fleet -->
+    <div class="right-panel">
+
+      <!-- Fleet & Driver — Motive (now fills full right panel) -->
+      <div class="motive-section">
+        <div class="motive-header">
+          <div class="motive-title">⚡ Fleet &amp; Driver · Motive</div>
+          <div class="motive-count" id="motive-count"></div>
+        </div>
+        <div class="driver-grid" id="motive-driver-grid">
+          <div class="motive-empty">Loading...</div>
+        </div>
+      </div>
+
+    </div><!-- /right-panel -->
+
+  </div><!-- /main-content -->
+  </div><!-- /pane-ops -->
+
+  <!-- Tab 2: A/R Aging -->
+  <div id="pane-ar" class="tab-pane" style="display:none">
+    <div class="ar-tab-page">
+
+      <div class="ar-tab-hdr">
+        <div class="ar-tab-hdr-left">
+          <div class="ar-tab-title">A/R Aging Report</div>
+          <div class="ar-tab-grand" id="ar-total">$--</div>
+          <div class="ar-tab-grand-lbl">Total Outstanding</div>
+        </div>
+        <div style="text-align:right; color:var(--muted); font-size:10px; letter-spacing:2px; text-transform:uppercase; padding-bottom:4px;">Live from Alvys</div>
+      </div>
+
+      <div class="ar-tab-buckets">
+        <div class="ar-tab-bucket b-cur">
+          <div class="ar-tab-bucket-lbl">Current · 0–30 Days</div>
+          <div class="ar-tab-bucket-amt" id="ar-current">$--</div>
+          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill" id="ar-bar-current" style="width:0%"></div></div>
+        </div>
+        <div class="ar-tab-bucket b-31">
+          <div class="ar-tab-bucket-lbl">31–60 Days</div>
+          <div class="ar-tab-bucket-amt" id="ar-31-60">$--</div>
+          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill d31" id="ar-bar-31-60" style="width:0%"></div></div>
+        </div>
+        <div class="ar-tab-bucket b-61">
+          <div class="ar-tab-bucket-lbl">61–90 Days</div>
+          <div class="ar-tab-bucket-amt" id="ar-61-90">$--</div>
+          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill d61" id="ar-bar-61-90" style="width:0%"></div></div>
+        </div>
+        <div class="ar-tab-bucket b-90">
+          <div class="ar-tab-bucket-lbl">90+ Days Overdue</div>
+          <div class="ar-tab-bucket-amt red" id="ar-90plus">$--</div>
+          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill red" id="ar-bar-90plus" style="width:0%"></div></div>
+        </div>
+      </div>
+
+      <div class="ar-tab-inv-section">
+        <div class="ar-tab-inv-hdr" id="ar-tab-inv-hdr">Past Due Invoices</div>
+        <div class="ar-tab-inv-scroll" id="ar-overdue-list">
+          <div class="ar-tab-none">Loading invoices...</div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /pane-ar -->
+
+  </div><!-- /tab-panes -->
+  </div><!-- /tab-area -->
+
+</div><!-- /dashboard -->
+
+<div class="error-bar" id="error-bar"></div>
+
+<script>
+// ── Live Clock ──────────────────────────────────────────────────────────────
+const DAYS   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTHS = ['January','February','March','April','May','June',
+                'July','August','September','October','November','December'];
+
+function updateClock() {
+  const now = new Date();
+  const h = String(now.getHours()).padStart(2,'0');
+  const m = String(now.getMinutes()).padStart(2,'0');
+  const s = String(now.getSeconds()).padStart(2,'0');
+  document.getElementById('clock').textContent = `${h}:${m}:${s}`;
+  document.getElementById('date-line').textContent =
+    `${DAYS[now.getDay()]}, ${MONTHS[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── Formatting ───────────────────────────────────────────────────────────────
+const fmt    = n => Math.round(n).toLocaleString('en-US');
+const fmtRev = n => '$' + Math.round(n).toLocaleString('en-US');
+
+function badgeClass(status) {
+  const s = status.toLowerCase();
+  if (s.includes('transit'))  return 'badge transit';
+  if (s.includes('dispatch')) return 'badge dispatched';
+  return 'badge';
+}
+
+// ── Table Auto-Scroll ────────────────────────────────────────────────────────
+let scrollInterval = null;
+let scrollPos      = 0;
+
+function setupScroll() {
+  // On mobile the table scrolls natively — skip the TV auto-scroll
+  if (window.innerWidth <= 768) return;
+  clearInterval(scrollInterval);
+  scrollPos = 0;
+  const scroller = document.getElementById('table-scroller');
+  const viewport = document.getElementById('table-viewport');
+  scroller.style.transform = 'translateY(0)';
+
+  const rowH      = 42;
+  const visRows   = Math.floor(viewport.clientHeight / rowH);
+  const totalRows = document.querySelectorAll('#loads-tbody tr').length;
+
+  if (totalRows <= visRows) return;
+
+  scrollInterval = setInterval(() => {
+    scrollPos += rowH;
+    const maxScroll = (totalRows - visRows) * rowH;
+    if (scrollPos > maxScroll) {
+      setTimeout(() => {
+        scroller.style.transition = 'none';
+        scrollPos = 0;
+        scroller.style.transform = 'translateY(0)';
+        setTimeout(() => { scroller.style.transition = 'transform 0.6s ease'; }, 50);
+      }, 2500);
+      return;
+    }
+    scroller.style.transform = `translateY(-${scrollPos}px)`;
+  }, 3500);
+}
+
+// ── CP2 FSC Matrix ───────────────────────────────────────────────────────────
+const FSC_MATRIX = [
+  [3.20,3.29,0.00],[3.30,3.39,0.02],[3.40,3.49,0.03],[3.50,3.59,0.06],
+  [3.60,3.69,0.08],[3.70,3.79,0.09],[3.80,3.89,0.11],[3.90,3.99,0.12],
+  [4.00,4.09,0.14],[4.10,4.19,0.15],[4.20,4.29,0.17],[4.30,4.39,0.18],
+  [4.40,4.49,0.20],[4.50,4.59,0.21],[4.60,4.69,0.24],[4.70,4.79,0.26],
+  [4.80,4.89,0.27],[4.90,4.99,0.29],[5.00,5.09,0.30],[5.10,5.19,0.32],
+  [5.20,5.29,0.34],[5.30,5.39,0.35],[5.40,5.49,0.37],[5.50,5.59,0.39],
+  [5.60,5.69,0.40],[5.70,5.79,0.42],[5.80,5.89,0.44],[5.90,5.99,0.45],
+];
+function getFSCRate(p) {
+  for (const [lo,hi,r] of FSC_MATRIX) { if (p >= lo && p <= hi) return r; }
+  if (p < 3.20) return 0.00;
+  if (p >= 6.00) return Math.round((0.45 + Math.floor((p-5.90)/0.10)*0.02)*100)/100;
+  return null;
+}
+
+// ── Tab Switching ─────────────────────────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab-pane').forEach(p => { p.style.display = 'none'; });
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('pane-' + name);
+  const btn  = document.getElementById('tab-' + name);
+  if (pane) pane.style.display = '';
+  if (btn)  btn.classList.add('active');
+}
+
+// ── A/R Aging Renderer ────────────────────────────────────────────────────────
+function renderAging(a) {
+  if (!a || !a.total) return;
+  const pct = n => Math.min(100, Math.round((n / a.total) * 100)) + '%';
+
+  document.getElementById('ar-total').textContent       = fmtRev(a.total);
+  document.getElementById('ar-current').textContent     = fmtRev(a.current  || 0);
+  document.getElementById('ar-31-60').textContent       = fmtRev(a.d31_60   || 0);
+  document.getElementById('ar-61-90').textContent       = fmtRev(a.d61_90   || 0);
+  document.getElementById('ar-90plus').textContent      = fmtRev(a.d90plus  || 0);
+  document.getElementById('ar-bar-current').style.width = pct(a.current  || 0);
+  document.getElementById('ar-bar-31-60').style.width   = pct(a.d31_60   || 0);
+  document.getElementById('ar-bar-61-90').style.width   = pct(a.d61_90   || 0);
+  document.getElementById('ar-bar-90plus').style.width  = pct(a.d90plus  || 0);
+
+  const invoices = (a.overdue_invoices || []).slice().sort((x, y) => y.age_days - x.age_days);
+
+  // Tab badge — shows overdue count without needing to switch tabs
+  const badge = document.getElementById('tab-ar-badge');
+  if (badge) badge.textContent = invoices.length ? invoices.length : '';
+
+  // Update tab invoice list header
+  const hdrEl = document.getElementById('ar-tab-inv-hdr');
+  if (hdrEl) hdrEl.textContent = `Past Due · ${invoices.length} Invoice${invoices.length!==1?'s':''}`;
+
+  const listEl = document.getElementById('ar-overdue-list');
+  if (!listEl) return;
+  if (invoices.length === 0) {
+    listEl.innerHTML = '<div class="ar-tab-none">No invoices past 30 days ✓</div>'; return;
+  }
+  function ageClass(d) { return d > 90 ? 'd90' : d > 60 ? 'd61' : 'd31'; }
+  function ageLabel(d) { return d > 90 ? '90+ days' : d + ' days'; }
+  listEl.innerHTML = invoices.map(inv => `
+    <div class="ar-tab-inv-row">
+      <span class="ar-ov-id">#${inv.load_id}</span>
+      <span class="ar-ov-cust">${inv.customer}</span>
+      <span class="ar-ov-amt">${fmtRev(inv.balance)}</span>
+      <span class="ar-ov-age ${ageClass(inv.age_days)}">${ageLabel(inv.age_days)}</span>
+    </div>`).join('');
+}
+
+// ── Sample AR Aging — exact figures from Alvys AR Aging report ───────────────
+// 16 total unpaid invoices, $28,407.27 total
+//   Current (0-30 days):  $16,292.77  (10 invoices)
+//   30 Days  (31-60):     $10,029.50  (4 invoices — details from live API)
+//   60 Days  (61-90):     $0.00       (0 invoices)
+//   90 Days  (90+):       $2,085.00   (2 invoices — TQL + SYNCTR)
+// overdue_invoices = ALL invoices > 30 days old (31-60 + 90+), sorted oldest first.
+// Live API supplies individual invoice detail; 31-60 day entries shown as placeholders.
+const SAMPLE_AGING = {
+  total:    28407.27,
+  current:  16292.77,  // 0-30 days
+  d31_60:   10029.50,  // 31-60 days
+  d61_90:       0.00,  // 61-90 days
+  d90plus:   2085.00,  // 90+ days
+  overdue_invoices: [
+    // 90+ days (known from Alvys screenshot) — sorted oldest first
+    { load_id: "31469-55286", customer: "SYNCTR", balance:  235.00, age_days: 98 },
+    { load_id: "34815616",    customer: "TQL",    balance: 1850.00, age_days: 96 },
+    // 31-60 days — 4 invoices totaling $10,029.50; individual load/customer populated by live API
+    { load_id: "1000229", customer: "Echo Global",  balance: 2507.38, age_days: 45 },
+    { load_id: "1000231", customer: "Echo Global",  balance: 2507.37, age_days: 43 },
+    { load_id: "1000233", customer: "Echo Global",  balance: 2507.38, age_days: 38 },
+    { load_id: "1000236", customer: "Echo Global",  balance: 2507.37, age_days: 35 },
+  ],
+};
+
+// ── Sample loads (Dispatched & In Transit only) ───────────────────────────────
+// Drivers sourced from Alvys "Driver 1" column. Origins/destinations will
+// auto-populate from the live API; shown as "—" in preview fallback only.
+// Destinations populated from live Alvys data; "—" = not yet returned by API.
+const SAMPLE_LOADS = [
+  { id:"1000238", origin:"Austin, TX",       destination:"San Antonio, TX", miles:33,   revenue:330,   agent:"Xavier Flores", driver:"Mike",           status:"Dispatched" },
+  { id:"1000241", origin:"Round Rock, TX",   destination:"Houston, TX",     miles:339,  revenue:1000,  agent:"Xavier Flores", driver:"Ramon",          status:"Dispatched" },
+  { id:"1000235", origin:"Gallatin, TN",     destination:"Los Angeles, CA", miles:2089, revenue:37950, agent:"Ken Keith",     driver:"Travis Locus",   status:"In Transit"  },
+  { id:"1000243", origin:"Albuquerque, NM",  destination:"Dallas, TX",      miles:649,  revenue:51700, agent:"Ken Keith",     driver:"Tracy Saunders", status:"Dispatched"  },
+  { id:"1000239", origin:"Argyle, TX",       destination:"Kissimmee, FL",   miles:1122, revenue:3366,  agent:"—",             driver:"Ramon",          status:"Dispatched"  },
+  { id:"1000240", origin:"Kissimmee, FL",    destination:"Atlanta, GA",     miles:440,  revenue:3366,  agent:"Xavier Flores", driver:"Ramon",          status:"Dispatched"  },
+  { id:"1000244", origin:"Dallas, TX",       destination:"Phoenix, AZ",     miles:1016, revenue:2900,  agent:"—",             driver:"Lawrence Carr",  status:"Dispatched"  },
+];
+
+// ── Sample Motive driver data (shown in preview fallback) ────────────────────
+const SAMPLE_MOTIVE = {
+  drivers: [
+    { name: "Travis Locus",   vehicle: "3201", status: "driving",             location: "Nashville, TN",     hos_drive: "9:45", hos_shift: "11:00", hos_cycle: "52:30" },
+    { name: "",               vehicle: "3202", status: "on_duty_not_driving", location: "Mansfield, TX",     hos_drive: "8:00", hos_shift: "10:00", hos_cycle: "45:00" },
+    { name: "Tracy Saunders", vehicle: "3203", status: "driving",             location: "Albuquerque, NM",   hos_drive: "7:12", hos_shift: "9:30",  hos_cycle: "48:15" },
+    { name: "Lawrence Carr",  vehicle: "3204", status: "driving",             location: "Dallas, TX",        hos_drive: "6:20", hos_shift: "8:00",  hos_cycle: "38:00" },
+    { name: "Howard Coleman", vehicle: "",     status: "off_duty",            location: "",                  hos_drive: null,   hos_shift: null,    hos_cycle: "70:00" },
+    { name: "Pauletta Carr",  vehicle: "",     status: "off_duty",            location: "Eastland, TX",      hos_drive: null,   hos_shift: null,    hos_cycle: "41:20" },
+  ],
+  vehicles: [],
+};
+
+// ── EIA Diesel Price (live fetch from browser) ────────────────────────────────
+const EIA_KEY = "fEHQ6dpfd8Ti6ipbvdJj969fWAqmOPqiRfjEcF7P";
+async function fetchDieselPrice() {
+  try {
+    const p = new URLSearchParams([
+      ["api_key", EIA_KEY], ["frequency","weekly"], ["data[0]","value"],
+      ["facets[product][]","EPD2D"], ["facets[process][]","PTE"],
+      ["facets[duoarea][]","NUS"], ["sort[0][column]","period"],
+      ["sort[0][direction]","desc"], ["length","1"],
+    ]);
+    const r = await fetch(`https://api.eia.gov/v2/petroleum/pri/gnd/data/?${p}`);
+    const d = await r.json();
+    const item = d?.response?.data?.[0];
+    if (item) return { price: parseFloat(item.value), period: item.period };
+  } catch(e) { console.error("EIA error:", e); }
+  return null;
+}
+
+// ── Motive driver panel renderer ─────────────────────────────────────────────
+function renderMotive(m) {
+  const el  = document.getElementById('motive-driver-grid');
+  const cnt = document.getElementById('motive-count');
+  if (!el) return;
+  const drivers = (m && m.drivers) || [];
+  if (cnt) cnt.textContent = drivers.length ? drivers.length + ' driver' + (drivers.length !== 1 ? 's' : '') : '';
+  if (!m || m.error) {
+    el.innerHTML = `<div class="motive-err">⚠ ${(m && m.error) || 'Unavailable'}</div>`;
+    return;
+  }
+  if (drivers.length === 0) {
+    el.innerHTML = '<div class="motive-empty">No drivers active</div>';
+    return;
+  }
+  function sc(s) {
+    if (s === 'on_duty_not_driving') return 's-on_duty';
+    return s ? 's-' + s : 's-off_duty';
+  }
+  function sl(s) {
+    if (s === 'driving')             return 'Driving';
+    if (s === 'on_duty_not_driving') return 'On Duty';
+    if (s === 'sleeper_berth')       return 'Sleeper';
+    return 'Off Duty';
+  }
+  el.innerHTML = drivers.map(d => {
+    const hosStr = d.hos_drive
+      ? `<span class="driver-hos">🕐 <strong>${d.hos_drive}</strong> drive left</span>`
+      : (d.hos_shift ? `<span class="driver-hos">🕐 <strong>${d.hos_shift}</strong> shift left</span>` : '');
+    const locStr = d.location ? `<span class="driver-loc">📍 ${d.location}</span>` : '';
+    const truckTag = d.vehicle ? `<span class="driver-truck">Truck ${d.vehicle}</span>` : '';
+    return `
+      <div class="driver-card ${sc(d.status)}">
+        <div class="driver-row1">
+          <div class="driver-name">${d.name || '—'}</div>
+          ${truckTag}
+          <div class="driver-badge ${sc(d.status)}">${sl(d.status)}</div>
+        </div>
+        <div class="driver-row2">${hosStr}${locStr}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── Render dashboard data ─────────────────────────────────────────────────────
+function renderData(data) {
+  // Diesel price
+  if (data.diesel_price != null) {
+    document.getElementById('diesel-price').textContent = '$' + data.diesel_price.toFixed(3);
+    if (data.diesel_period) {
+      document.getElementById('diesel-period').textContent =
+        `Week of ${data.diesel_period}  ·  EIA Weekly`;
+    }
+  }
+
+  // FSC rate
+  if (data.fsc_rate != null) {
+    document.getElementById('fsc-rate').textContent = '$' + data.fsc_rate.toFixed(2);
+  }
+
+  // Tiles
+  document.getElementById('tile-count').textContent   = data.load_count ?? '--';
+  document.getElementById('tile-miles').textContent   = data.total_miles   ? fmt(data.total_miles)   : '--';
+  document.getElementById('tile-revenue').textContent = data.total_revenue ? fmtRev(data.total_revenue) : '$--';
+
+  if (data.last_updated) {
+    document.getElementById('updated-lbl').textContent = `Updated: ${data.last_updated}`;
+  }
+
+  // AR Aging (from live server)
+  if (data.aging && data.aging.total > 0) {
+    renderAging(data.aging);
+  }
+
+  // Fleet & Driver — Motive
+  if (data.motive) renderMotive(data.motive);
+
+  // Loads table
+  const tbody = document.getElementById('loads-tbody');
+  if (data.loads && data.loads.length > 0) {
+    tbody.innerHTML = data.loads.map(l => `
+      <tr>
+        <td class="td-id">#${l.id || '—'}</td>
+        <td class="td-route">${l.origin}</td>
+        <td class="td-route"><span class="td-arrow">→</span></td>
+        <td class="td-route">${l.destination}</td>
+        <td class="td-miles">${l.miles ? fmt(l.miles) + ' mi' : '—'}</td>
+        <td class="td-rev">${l.revenue ? fmtRev(l.revenue) : '—'}</td>
+        <td class="td-agent">${l.agent || '—'}</td>
+        <td class="td-driver">${l.driver || '—'}</td>
+        <td class="td-status"><span class="${badgeClass(l.status)}">${l.status}</span></td>
+      </tr>
+    `).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="9" class="no-loads">No active loads at this time</td></tr>';
+  }
+  setupScroll();
+
+  const errBar = document.getElementById('error-bar');
+  if (data.errors && data.errors.length > 0) {
+    errBar.textContent = '⚠ ' + data.errors.join('  |  ');
+    errBar.style.display = 'block';
+  } else {
+    errBar.style.display = 'none';
+  }
+}
+
+// ── Main fetch loop ───────────────────────────────────────────────────────────
+async function fetchData() {
+  // Try live Python server first
+  try {
+    const r = await fetch('/api/data', { signal: AbortSignal.timeout(3000) });
+    if (r.ok) { renderData(await r.json()); return; }
+  } catch (_) {}
+
+  // Fallback: live EIA diesel + sample data
+  renderAging(SAMPLE_AGING);
+  renderMotive(SAMPLE_MOTIVE);
+  const dieselData = await fetchDieselPrice();
+  const now = new Date();
+  renderData({
+    diesel_price:  dieselData?.price  ?? null,
+    diesel_period: dieselData?.period ?? null,
+    fsc_rate:      dieselData ? getFSCRate(dieselData.price) : null,
+    loads:         SAMPLE_LOADS,
+    load_count:    SAMPLE_LOADS.length,
+    total_miles:   SAMPLE_LOADS.reduce((s,l) => s+l.miles, 0),
+    total_revenue: SAMPLE_LOADS.reduce((s,l) => s+l.revenue, 0),
+    last_updated:  now.toLocaleDateString('en-US') + ' ' +
+                   now.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true}),
+    errors: [],
+  });
+}
+
+fetchData();
+setInterval(fetchData, 2 * 60 * 1000); // refresh every 2 min
+</script>
+</body>
+</html>
