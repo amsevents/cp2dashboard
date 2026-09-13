@@ -135,32 +135,41 @@ async function fetchLoads() {
       PageSize: 200,
       Status: ["Dispatched", "In Transit"],
     });
-    // Logged so we can confirm the real response field casing/shape in
-    // Netlify's function logs — the request body is confirmed, but the
-    // response schema had inconsistent casing across different doc pages
-    // I read, so this log is the actual source of truth.
-    console.log("Alvys /loads/search raw response sample:", JSON.stringify(data).slice(0, 1000));
+    // Logging the FULL first item (no truncation) — the earlier 1000-char
+    // slice cut off before reaching rate/miles/second-stop data, which is
+    // exactly what we need to confirm next.
+    console.log("Alvys /loads/search Total:", data.Total, "| First item keys:", Object.keys(data.Items?.[0] || {}));
+    console.log("Alvys /loads/search FULL first item:", JSON.stringify(data.Items?.[0]));
 
-    const rawLoads = data.items || data.results || data.loads || (Array.isArray(data) ? data : []);
+    const rawLoads = data.Items || data.items || data.results || data.loads || (Array.isArray(data) ? data : []);
 
     let totalMiles = 0;
     let totalRevenue = 0;
     const loads = rawLoads.map((l) => {
-      // Defensive against both camelCase and PascalCase, since Alvys's own
-      // docs showed both across different endpoint versions.
-      const miles = l.miles ?? l.Miles ?? l.totalMiles ?? 0;
-      const revenue = l.revenue ?? l.Revenue ?? l.rate?.total ?? l.Rate?.Total ?? 0;
+      // Confirmed structure: each load has a Stops array, each stop has an
+      // Address object. First stop ≈ origin, last stop ≈ destination.
+      const stops = l.Stops || l.stops || [];
+      const firstStop = stops[0];
+      const lastStop = stops[stops.length - 1];
+      const originAddr = firstStop?.Address || firstStop?.address;
+      const destAddr = lastStop?.Address || lastStop?.address;
+
+      // Miles/revenue fields not yet confirmed from a live response — still
+      // guessing here. Logging the full object above so we can lock these
+      // in on the next pass once the log shows where they actually live.
+      const miles = l.miles ?? l.Miles ?? l.totalMiles ?? l.TotalMiles ?? 0;
+      const revenue = l.revenue ?? l.Revenue ?? l.rate?.total ?? l.Rate?.Total ?? l.RateTotal ?? 0;
       totalMiles += miles;
       totalRevenue += revenue;
       return {
-        id: l.loadNumber ?? l.LoadNumber ?? l.id ?? l.Id,
-        origin: l.originCity ?? l.OriginCity ?? l.origin?.city ?? "—",
-        destination: l.destinationCity ?? l.DestinationCity ?? l.destination?.city ?? "—",
+        id: l.LoadNumber ?? l.loadNumber ?? l.Id ?? l.id,
+        origin: originAddr ? `${originAddr.City ?? originAddr.city}, ${originAddr.State ?? originAddr.state}` : "—",
+        destination: destAddr ? `${destAddr.City ?? destAddr.city}, ${destAddr.State ?? destAddr.state}` : "—",
         miles,
         revenue,
-        agent: l.customerSalesAgentName ?? l.salesAgent ?? l.agentName ?? "—",
-        driver: l.driverName ?? "—",
-        status: l.status ?? l.Status ?? "—",
+        agent: l.CustomerSalesAgentName ?? l.customerSalesAgentName ?? l.salesAgent ?? "—",
+        driver: l.DriverName ?? l.driverName ?? "—",
+        status: l.Status ?? l.status ?? "—",
       };
     });
 
@@ -190,15 +199,15 @@ async function fetchAging() {
         End: now.toISOString(),
       },
       // Alvys requires at least one of Status/PONumbers/CustomerId/LoadNumbers/
-      // OrderNumbers to be non-empty (confirmed via a live validation error).
-      // "Open" is a first guess at their invoice status enum — if this is
-      // wrong, Alvys's own error message will very likely list the exact
-      // valid values, which we can then swap in here.
-      Status: ["Open"],
+      // OrderNumbers to be non-empty. "AwaitingPayment" is confirmed directly
+      // from Alvys's own validation error message (the real enum is Draft,
+      // AwaitingPayment, Paid) — this is what "unpaid/outstanding" means here.
+      Status: ["AwaitingPayment"],
     });
-    console.log("Alvys /invoices/search raw response sample:", JSON.stringify(data).slice(0, 1000));
+    console.log("Alvys /invoices/search Total:", data.Total, "| First item keys:", Object.keys(data.Items?.[0] || {}));
+    console.log("Alvys /invoices/search FULL first item:", JSON.stringify(data.Items?.[0]));
 
-    const rawInvoices = data.items || data.results || data.invoices || (Array.isArray(data) ? data : []);
+    const rawInvoices = data.Items || data.items || data.results || data.invoices || (Array.isArray(data) ? data : []);
 
     const buckets = { current: 0, d31_60: 0, d61_90: 0, d90plus: 0 };
     const overdueInvoices = [];
@@ -298,22 +307,37 @@ async function fetchMotive() {
       throw new Error(`Motive API failed: ${resp.status} ${await resp.text()}`);
     }
     const data = await resp.json();
-    // Log the raw shape once so it's easy to check in Netlify's function
-    // logs if the mapping below needs adjusting.
-    console.log("Motive raw response sample:", JSON.stringify(data).slice(0, 500));
+    // Confirmed shape: {"hours_of_services":[{"hours_of_service":{...}}]} —
+    // each record is wrapped one level deeper than I originally guessed.
+    const rawEntries = data.hours_of_services || data.hours_of_service || data.drivers || (Array.isArray(data) ? data : []);
+    console.log("Motive: total records:", rawEntries.length, "| First entry FULL:", JSON.stringify(rawEntries[0]));
 
-    const rawDrivers = data.hours_of_service || data.drivers || (Array.isArray(data) ? data : []);
+    // ⚠️ Confirmed from a live response: this endpoint gives duration
+    // ALREADY LOGGED today (driving_duration, on_duty_duration, etc., in
+    // seconds) — not remaining/available time. Your dashboard's labels say
+    // "drive left" / "shift left", which implies remaining allowance, so
+    // these numbers won't mean what those labels say until we either
+    // relabel them or switch to Motive's v1/available_time endpoint, which
+    // is the one actually meant for "remaining time." Flagging rather than
+    // quietly mislabeling.
+    function formatDuration(seconds) {
+      if (seconds == null) return null;
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      return `${h}:${String(m).padStart(2, "0")}`;
+    }
 
-    const drivers = rawDrivers.map((entry) => {
-      const d = entry.driver || entry;
+    const drivers = rawEntries.map((entry) => {
+      const hos = entry.hours_of_service || entry;
+      const d = hos.driver || {};
       return {
         name: d.first_name ? `${d.first_name} ${d.last_name || ""}`.trim() : d.name || "—",
-        vehicle: entry.vehicle?.number || entry.vehicle_number || "",
-        status: entry.duty_status || entry.status || "off_duty",
-        location: entry.current_location?.description || entry.location || "",
-        hos_drive: entry.drive_time_remaining || entry.hos_drive || null,
-        hos_shift: entry.shift_time_remaining || entry.hos_shift || null,
-        hos_cycle: entry.cycle_time_remaining || entry.hos_cycle || null,
+        vehicle: "", // Not present on this endpoint's response.
+        status: "", // Not present on this endpoint's response — see note above.
+        location: "", // Not present on this endpoint's response.
+        hos_drive: formatDuration(hos.driving_duration),
+        hos_shift: formatDuration(hos.on_duty_duration),
+        hos_cycle: null, // Not available from this endpoint.
       };
     });
 
