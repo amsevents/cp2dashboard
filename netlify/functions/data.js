@@ -18,9 +18,12 @@ const ALVYS_AUDIENCE = "https://api.alvys.com/public/";
 const ALVYS_API_BASE = "https://integrations.alvys.com";
 const ALVYS_API_VERSION = process.env.ALVYS_API_VERSION || "1.0";
 
+// Confirmed against docs.alvys.com after live testing: plain GET /loads only
+// accepts id/loadNumber/orderNumber (single-record lookup, not a list). The
+// real way to list/filter loads and invoices is the POST /search endpoints.
 const ALVYS_ENDPOINTS = {
-  loads: `/api/p/v${ALVYS_API_VERSION}/loads`,
-  invoices: `/api/p/v${ALVYS_API_VERSION}/invoices`,
+  loadsSearch: `/api/p/v${ALVYS_API_VERSION}/loads/search`,
+  invoicesSearch: `/api/p/v${ALVYS_API_VERSION}/invoices/search`,
 };
 
 // Kept here per your call — server-side only, so it's not exposed to
@@ -103,34 +106,61 @@ async function alvysGet(path, params = {}) {
   return resp.json();
 }
 
+async function alvysPost(path, body) {
+  const token = await getAlvysToken();
+  const resp = await fetch(`${ALVYS_API_BASE}${path}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!resp.ok) {
+    throw new Error(`Alvys API ${path} failed: ${resp.status} ${await resp.text()}`);
+  }
+  return resp.json();
+}
+
 // ── Data fetchers ──────────────────────────────────────────────────────────
 
 async function fetchLoads() {
   try {
-    const data = await alvysGet(ALVYS_ENDPOINTS.loads, { status: "Dispatched,InTransit" });
-    // Logged once so we can confirm real field names in Netlify's function
-    // logs and fix any mismatches — this is the actual source of truth,
-    // not the guessed field names below.
-    console.log("Alvys /loads raw response sample:", JSON.stringify(data).slice(0, 800));
+    // Confirmed request shape from docs.alvys.com/reference/loads/search-loads.
+    // Status enum confirmed from the docs: In Review, Open, Quoted, Reserved,
+    // Covered, Dispatched, In Transit, Delivered, TONU, Released, Queued,
+    // Invoiced, Financed, Completed, Paid, Cancelled.
+    const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
+      Page: 0,
+      PageSize: 200,
+      Status: ["Dispatched", "In Transit"],
+    });
+    // Logged so we can confirm the real response field casing/shape in
+    // Netlify's function logs — the request body is confirmed, but the
+    // response schema had inconsistent casing across different doc pages
+    // I read, so this log is the actual source of truth.
+    console.log("Alvys /loads/search raw response sample:", JSON.stringify(data).slice(0, 1000));
 
-    const rawLoads = data.items || data.loads || (Array.isArray(data) ? data : []);
+    const rawLoads = data.items || data.results || data.loads || (Array.isArray(data) ? data : []);
 
     let totalMiles = 0;
     let totalRevenue = 0;
     const loads = rawLoads.map((l) => {
-      const miles = l.miles ?? l.totalMiles ?? 0;
-      const revenue = l.revenue ?? l.rate?.total ?? 0;
+      // Defensive against both camelCase and PascalCase, since Alvys's own
+      // docs showed both across different endpoint versions.
+      const miles = l.miles ?? l.Miles ?? l.totalMiles ?? 0;
+      const revenue = l.revenue ?? l.Revenue ?? l.rate?.total ?? l.Rate?.Total ?? 0;
       totalMiles += miles;
       totalRevenue += revenue;
       return {
-        id: l.loadNumber ?? l.id,
-        origin: l.originCity ?? l.origin?.city ?? "—",
-        destination: l.destinationCity ?? l.destination?.city ?? "—",
+        id: l.loadNumber ?? l.LoadNumber ?? l.id ?? l.Id,
+        origin: l.originCity ?? l.OriginCity ?? l.origin?.city ?? "—",
+        destination: l.destinationCity ?? l.DestinationCity ?? l.destination?.city ?? "—",
         miles,
         revenue,
-        agent: l.salesAgent ?? l.agentName ?? "—",
+        agent: l.customerSalesAgentName ?? l.salesAgent ?? l.agentName ?? "—",
         driver: l.driverName ?? "—",
-        status: l.status ?? "—",
+        status: l.status ?? l.Status ?? "—",
       };
     });
 
@@ -143,19 +173,37 @@ async function fetchLoads() {
 
 async function fetchAging() {
   try {
-    const data = await alvysGet(ALVYS_ENDPOINTS.invoices, { status: "Open" });
-    console.log("Alvys /invoices raw response sample:", JSON.stringify(data).slice(0, 800));
+    // Confirmed request shape from docs.alvys.com/reference/invoices/search-invoices.
+    // Status is conditionally required alongside date ranges — using a wide
+    // InvoicedDateRange instead of guessing at invoice status enum values
+    // (which weren't documented anywhere I could confirm), then computing
+    // "open/unpaid" client-side from each invoice's balance.
+    const now = new Date();
+    const twoYearsAgo = new Date(now);
+    twoYearsAgo.setFullYear(now.getFullYear() - 2);
 
-    const rawInvoices = data.items || data.invoices || (Array.isArray(data) ? data : []);
+    const data = await alvysPost(ALVYS_ENDPOINTS.invoicesSearch, {
+      Page: 0,
+      PageSize: 200,
+      InvoicedDateRange: {
+        Start: twoYearsAgo.toISOString(),
+        End: now.toISOString(),
+      },
+    });
+    console.log("Alvys /invoices/search raw response sample:", JSON.stringify(data).slice(0, 1000));
+
+    const rawInvoices = data.items || data.results || data.invoices || (Array.isArray(data) ? data : []);
 
     const buckets = { current: 0, d31_60: 0, d61_90: 0, d90plus: 0 };
     const overdueInvoices = [];
     let total = 0;
-    const now = new Date();
 
     for (const inv of rawInvoices) {
-      const balance = inv.balance ?? inv.balanceAmount ?? 0;
-      const dateStr = inv.invoiceDate ?? inv.dueDate;
+      const balance = inv.balance ?? inv.Balance ?? inv.balanceAmount ?? 0;
+      // Only count invoices that still have money owed on them.
+      if (!balance || balance <= 0) continue;
+
+      const dateStr = inv.invoicedDate ?? inv.InvoicedDate ?? inv.dueDate ?? inv.DueDate;
       let ageDays = 0;
       if (dateStr) {
         const invDate = new Date(dateStr);
@@ -166,8 +214,8 @@ async function fetchAging() {
       total += balance;
 
       const entry = {
-        load_id: inv.loadNumber ?? "—",
-        customer: inv.customerName ?? "—",
+        load_id: inv.loadNumber ?? inv.LoadNumber ?? inv.loadNumbers?.[0] ?? "—",
+        customer: inv.customerName ?? inv.CustomerName ?? "—",
         balance,
         age_days: ageDays,
       };
