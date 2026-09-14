@@ -240,30 +240,31 @@ async function fetchMotive() {
                                           throw new Error(`Motive API failed: ${resp.status} ${await resp.text()}`);
                           }
                           const data = await resp.json();
-                          const rawEntries = data.available_times || data.drivers || (Array.isArray(data) ? data : []);
-                          console.log("Motive /available_time RAW:", JSON.stringify(data).slice(0, 2000));
-                      console.log("Motive /available_time: total records:", rawEntries.length);
-                      
-                          function formatDuration(seconds) {
-                                          if (seconds == null) return null;
-                                          const h = Math.floor(seconds / 3600);
-                                          const m = Math.floor((seconds % 3600) / 60);
-                                          return `${h}:${String(m).padStart(2, "0")}`;
-                          }
-                      
-                          const drivers = rawEntries.map((entry) => {
-                                          const u = entry.user || entry;
-                                          const at = entry.available_time || {};
-                                          return {
-                                                            name: u.first_name ? `${u.first_name} ${u.last_name || ""}`.trim() : u.name || "—",
-                                                            vehicle: "",
-                                                            status: u.duty_status || "",
-                                                            location: "",
-                                                            hos_drive: formatDuration(at.drive),
-                                                            hos_shift: formatDuration(at.shift),
-                                                            hos_cycle: formatDuration(at.cycle),
-                                          };
-                          });
+                          const rawEntries = data.users || data.drivers || (Array.isArray(data) ? data : []);
+                                  console.log("Motive: total records:", rawEntries.length);
+
+                                  function formatDuration(seconds) {
+                                                          if (seconds == null) return null;
+                                                          const h = Math.floor(seconds / 3600);
+                                                          const m = Math.floor((seconds % 3600) / 60);
+                                                          return `${h}:${String(m).padStart(2, "0")}`;
+                                  }
+
+                                  const drivers = rawEntries
+                                    .map((entry) => entry.user || entry)
+                                    .filter((u) => u.status !== "deactivated")
+                                    .map((u) => {
+                                                              const at = u.available_time || {};
+                                                              return {
+                                                                                          name: u.first_name ? `${u.first_name} ${u.last_name || ""}`.trim() : u.name || "—",
+                                                                                          vehicle: "",
+                                                                                          status: u.duty_status || "",
+                                                                                          location: "",
+                                                                                          hos_drive: formatDuration(at.drive),
+                                                                                          hos_shift: formatDuration(at.shift),
+                                                                                          hos_cycle: formatDuration(at.cycle),
+                                                              };
+                                    });
                       
                           return { motive: { drivers }, error: null };
             } catch (e) {
