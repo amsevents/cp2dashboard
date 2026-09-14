@@ -222,52 +222,54 @@ async function fetchDieselPrice() {
 const MOTIVE_API_BASE = "https://api.gomotive.com";
 
 async function fetchMotive() {
-          const apiKey = process.env.MOTIVE_API_KEY;
-          if (!apiKey) {
-                      return { motive: { drivers: [] }, error: "Motive: MOTIVE_API_KEY not set" };
-          }
-
-  try {
-              const todayStr = new Date().toISOString().slice(0, 10);
-              const resp = await fetch(
-                            `${MOTIVE_API_BASE}/v1/hours_of_service?start_date=${todayStr}&end_date=${todayStr}`,
-                      { headers: { "X-Api-Key": apiKey } }
-                          );
-              if (!resp.ok) {
-                            throw new Error(`Motive API failed: ${resp.status} ${await resp.text()}`);
-              }
-              const data = await resp.json();
-              const rawEntries = data.hours_of_services || data.hours_of_service || data.drivers || (Array.isArray(data) ? data : []);
-              console.log("Motive: total records:", rawEntries.length);
-
-            function formatDuration(seconds) {
-                          if (seconds == null) return null;
-                          const h = Math.floor(seconds / 3600);
-                          const m = Math.floor((seconds % 3600) / 60);
-                          return `${h}:${String(m).padStart(2, "0")}`;
+            const apiKey = process.env.MOTIVE_API_KEY;
+            if (!apiKey) {
+                          return { motive: { drivers: [] }, error: "Motive: MOTIVE_API_KEY not set" };
             }
-
-            const drivers = rawEntries.map((entry) => {
-                          const hos = entry.hours_of_service || entry;
-                          const d = hos.driver || {};
-                          return {
-                                          name: d.first_name ? `${d.first_name} ${d.last_name || ""}`.trim() : d.name || "—",
-                                          vehicle: "",
-                                          status: "",
-                                          location: "",
-                                          hos_drive: formatDuration(hos.driving_duration),
-                                          hos_shift: formatDuration(hos.on_duty_duration),
-                                          hos_cycle: null,
-                          };
-            });
-
-            return { motive: { drivers }, error: null };
-  } catch (e) {
-              console.error("fetchMotive failed", e);
-              return { motive: { drivers: [] }, error: `Motive: ${e.message}` };
-  }
+          
+            try {
+                          // Switched from v1/hours_of_service to v1/available_time — confirmed
+                          // from Motive's own docs this is the endpoint that actually returns
+                          // duty_status (driving/on_duty_not_driving/sleeper_berth/off_duty) AND
+                          // genuine remaining time (not already-used time, which is what
+                          // hours_of_service gave us and was mislabeled as "left" on the UI).
+                          const resp = await fetch(`${MOTIVE_API_BASE}/v1/available_time`, {
+                                          headers: { "X-Api-Key": apiKey },
+                          });
+                          if (!resp.ok) {
+                                          throw new Error(`Motive API failed: ${resp.status} ${await resp.text()}`);
+                          }
+                          const data = await resp.json();
+                          const rawEntries = data.available_times || data.drivers || (Array.isArray(data) ? data : []);
+                          console.log("Motive /available_time: total records:", rawEntries.length);
+                      
+                          function formatDuration(seconds) {
+                                          if (seconds == null) return null;
+                                          const h = Math.floor(seconds / 3600);
+                                          const m = Math.floor((seconds % 3600) / 60);
+                                          return `${h}:${String(m).padStart(2, "0")}`;
+                          }
+                      
+                          const drivers = rawEntries.map((entry) => {
+                                          const u = entry.user || entry;
+                                          const at = entry.available_time || {};
+                                          return {
+                                                            name: u.first_name ? `${u.first_name} ${u.last_name || ""}`.trim() : u.name || "—",
+                                                            vehicle: "",
+                                                            status: u.duty_status || "",
+                                                            location: "",
+                                                            hos_drive: formatDuration(at.drive),
+                                                            hos_shift: formatDuration(at.shift),
+                                                            hos_cycle: formatDuration(at.cycle),
+                                          };
+                          });
+                      
+                          return { motive: { drivers }, error: null };
+            } catch (e) {
+                          console.error("fetchMotive failed", e);
+                          return { motive: { drivers: [] }, error: `Motive: ${e.message}` };
+            }
 }
-
 export default async function handler(request, context) {
           const errors = [];
 
