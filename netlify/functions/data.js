@@ -241,7 +241,8 @@ async function fetchMotive() {
                           }
                           const data = await resp.json();
                           const rawEntries = data.available_times || data.drivers || (Array.isArray(data) ? data : []);
-                          console.log("Motive /available_time: total records:", rawEntries.length);
+                          console.log("Motive /available_time RAW:", JSON.stringify(data).slice(0, 2000));
+                      console.log("Motive /available_time: total records:", rawEntries.length);
                       
                           function formatDuration(seconds) {
                                           if (seconds == null) return null;
