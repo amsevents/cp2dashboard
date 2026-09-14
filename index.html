@@ -518,15 +518,8 @@
   <!-- TAB AREA -->
   <div class="tab-area">
 
-  <!-- Tab Navigation -->
-  <div class="tab-nav">
-    <button class="tab-btn active" onclick="switchTab('ops')" id="tab-ops">Operations</button>
-    <button class="tab-btn" onclick="switchTab('ar')" id="tab-ar">A/R Aging <span class="tab-badge" id="tab-ar-badge"></span></button>
-  </div>
-
   <div class="tab-panes">
 
-  <!-- Tab 1: Operations Dashboard -->
   <div id="pane-ops" class="tab-pane">
   <div class="main-content">
 
@@ -585,7 +578,7 @@
 
     </div><!-- /left-panel -->
 
-    <!-- RIGHT: AR Aging Card + Fleet -->
+        <!-- RIGHT: Fleet & Driver Panel -->
     <div class="right-panel">
 
       <!-- Fleet & Driver — Motive (now fills full right panel) -->
@@ -603,52 +596,6 @@
 
   </div><!-- /main-content -->
   </div><!-- /pane-ops -->
-
-  <!-- Tab 2: A/R Aging -->
-  <div id="pane-ar" class="tab-pane" style="display:none">
-    <div class="ar-tab-page">
-
-      <div class="ar-tab-hdr">
-        <div class="ar-tab-hdr-left">
-          <div class="ar-tab-title">A/R Aging Report</div>
-          <div class="ar-tab-grand" id="ar-total">$--</div>
-          <div class="ar-tab-grand-lbl">Total Outstanding</div>
-        </div>
-        <div style="text-align:right; color:var(--muted); font-size:10px; letter-spacing:2px; text-transform:uppercase; padding-bottom:4px;">Live from Alvys</div>
-      </div>
-
-      <div class="ar-tab-buckets">
-        <div class="ar-tab-bucket b-cur">
-          <div class="ar-tab-bucket-lbl">Current · 0–30 Days</div>
-          <div class="ar-tab-bucket-amt" id="ar-current">$--</div>
-          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill" id="ar-bar-current" style="width:0%"></div></div>
-        </div>
-        <div class="ar-tab-bucket b-31">
-          <div class="ar-tab-bucket-lbl">31–60 Days</div>
-          <div class="ar-tab-bucket-amt" id="ar-31-60">$--</div>
-          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill d31" id="ar-bar-31-60" style="width:0%"></div></div>
-        </div>
-        <div class="ar-tab-bucket b-61">
-          <div class="ar-tab-bucket-lbl">61–90 Days</div>
-          <div class="ar-tab-bucket-amt" id="ar-61-90">$--</div>
-          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill d61" id="ar-bar-61-90" style="width:0%"></div></div>
-        </div>
-        <div class="ar-tab-bucket b-90">
-          <div class="ar-tab-bucket-lbl">90+ Days Overdue</div>
-          <div class="ar-tab-bucket-amt red" id="ar-90plus">$--</div>
-          <div class="ar-tab-bucket-bar"><div class="ar-tab-bucket-fill red" id="ar-bar-90plus" style="width:0%"></div></div>
-        </div>
-      </div>
-
-      <div class="ar-tab-inv-section">
-        <div class="ar-tab-inv-hdr" id="ar-tab-inv-hdr">Past Due Invoices</div>
-        <div class="ar-tab-inv-scroll" id="ar-overdue-list">
-          <div class="ar-tab-none">Loading invoices...</div>
-        </div>
-      </div>
-
-    </div>
-  </div><!-- /pane-ar -->
 
   </div><!-- /tab-panes -->
   </div><!-- /tab-area -->
@@ -738,84 +685,6 @@ function getFSCRate(p) {
   return null;
 }
 
-// ── Tab Switching ─────────────────────────────────────────────────────────────
-function switchTab(name) {
-  document.querySelectorAll('.tab-pane').forEach(p => { p.style.display = 'none'; });
-  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-  const pane = document.getElementById('pane-' + name);
-  const btn  = document.getElementById('tab-' + name);
-  if (pane) pane.style.display = '';
-  if (btn)  btn.classList.add('active');
-}
-
-// ── A/R Aging Renderer ────────────────────────────────────────────────────────
-function renderAging(a) {
-  if (!a || !a.total) return;
-  const pct = n => Math.min(100, Math.round((n / a.total) * 100)) + '%';
-
-  document.getElementById('ar-total').textContent       = fmtRev(a.total);
-  document.getElementById('ar-current').textContent     = fmtRev(a.current  || 0);
-  document.getElementById('ar-31-60').textContent       = fmtRev(a.d31_60   || 0);
-  document.getElementById('ar-61-90').textContent       = fmtRev(a.d61_90   || 0);
-  document.getElementById('ar-90plus').textContent      = fmtRev(a.d90plus  || 0);
-  document.getElementById('ar-bar-current').style.width = pct(a.current  || 0);
-  document.getElementById('ar-bar-31-60').style.width   = pct(a.d31_60   || 0);
-  document.getElementById('ar-bar-61-90').style.width   = pct(a.d61_90   || 0);
-  document.getElementById('ar-bar-90plus').style.width  = pct(a.d90plus  || 0);
-
-  const invoices = (a.overdue_invoices || []).slice().sort((x, y) => y.age_days - x.age_days);
-
-  // Tab badge — shows overdue count without needing to switch tabs
-  const badge = document.getElementById('tab-ar-badge');
-  if (badge) badge.textContent = invoices.length ? invoices.length : '';
-
-  // Update tab invoice list header
-  const hdrEl = document.getElementById('ar-tab-inv-hdr');
-  if (hdrEl) hdrEl.textContent = `Past Due · ${invoices.length} Invoice${invoices.length!==1?'s':''}`;
-
-  const listEl = document.getElementById('ar-overdue-list');
-  if (!listEl) return;
-  if (invoices.length === 0) {
-    listEl.innerHTML = '<div class="ar-tab-none">No invoices past 30 days ✓</div>'; return;
-  }
-  function ageClass(d) { return d > 90 ? 'd90' : d > 60 ? 'd61' : 'd31'; }
-  function ageLabel(d) { return d > 90 ? '90+ days' : d + ' days'; }
-  listEl.innerHTML = invoices.map(inv => `
-    <div class="ar-tab-inv-row">
-      <span class="ar-ov-id">#${inv.load_id}</span>
-      <span class="ar-ov-cust">${inv.customer}</span>
-      <span class="ar-ov-amt">${fmtRev(inv.balance)}</span>
-      <span class="ar-ov-age ${ageClass(inv.age_days)}">${ageLabel(inv.age_days)}</span>
-    </div>`).join('');
-}
-
-// ── Sample AR Aging — exact figures from Alvys AR Aging report ───────────────
-// 16 total unpaid invoices, $28,407.27 total
-//   Current (0-30 days):  $16,292.77  (10 invoices)
-//   30 Days  (31-60):     $10,029.50  (4 invoices — details from live API)
-//   60 Days  (61-90):     $0.00       (0 invoices)
-//   90 Days  (90+):       $2,085.00   (2 invoices — TQL + SYNCTR)
-// overdue_invoices = ALL invoices > 30 days old (31-60 + 90+), sorted oldest first.
-// Live API supplies individual invoice detail; 31-60 day entries shown as placeholders.
-const SAMPLE_AGING = {
-  total:    28407.27,
-  current:  16292.77,  // 0-30 days
-  d31_60:   10029.50,  // 31-60 days
-  d61_90:       0.00,  // 61-90 days
-  d90plus:   2085.00,  // 90+ days
-  overdue_invoices: [
-    // 90+ days (known from Alvys screenshot) — sorted oldest first
-    { load_id: "31469-55286", customer: "SYNCTR", balance:  235.00, age_days: 98 },
-    { load_id: "34815616",    customer: "TQL",    balance: 1850.00, age_days: 96 },
-    // 31-60 days — 4 invoices totaling $10,029.50; individual load/customer populated by live API
-    { load_id: "1000229", customer: "Echo Global",  balance: 2507.38, age_days: 45 },
-    { load_id: "1000231", customer: "Echo Global",  balance: 2507.37, age_days: 43 },
-    { load_id: "1000233", customer: "Echo Global",  balance: 2507.38, age_days: 38 },
-    { load_id: "1000236", customer: "Echo Global",  balance: 2507.37, age_days: 35 },
-  ],
-};
-
-// ── Sample loads (Dispatched & In Transit only) ───────────────────────────────
 // Drivers sourced from Alvys "Driver 1" column. Origins/destinations will
 // auto-populate from the live API; shown as "—" in preview fallback only.
 // Destinations populated from live Alvys data; "—" = not yet returned by API.
@@ -928,11 +797,6 @@ function renderData(data) {
     document.getElementById('updated-lbl').textContent = `Updated: ${data.last_updated}`;
   }
 
-  // AR Aging (from live server)
-  if (data.aging && data.aging.total > 0) {
-    renderAging(data.aging);
-  }
-
   // Fleet & Driver — Motive
   if (data.motive) renderMotive(data.motive);
 
@@ -975,7 +839,6 @@ async function fetchData() {
   } catch (_) {}
 
   // Fallback: live EIA diesel + sample data
-  renderAging(SAMPLE_AGING);
   renderMotive(SAMPLE_MOTIVE);
   const dieselData = await fetchDieselPrice();
   const now = new Date();
