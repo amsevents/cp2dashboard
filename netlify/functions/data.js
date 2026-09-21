@@ -304,7 +304,10 @@ export default async function handler(request, context) {
 
   return new Response(JSON.stringify(body), {
               status: 200,
-              headers: { "Content-Type": "application/json" },
+              headers: {
+                                                    "Content-Type": "application/json",
+                                                    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+              },
   });
 }
 
