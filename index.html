@@ -834,7 +834,7 @@ function renderData(data) {
 async function fetchData() {
   // Try live Python server first
   try {
-    const r = await fetch('/api/data', { signal: AbortSignal.timeout(3000) });
+        const r = await fetch('/api/data', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
     if (r.ok) { renderData(await r.json()); return; }
   } catch (_) {}
 
