@@ -858,6 +858,10 @@ async function fetchData() {
 
 fetchData();
 setInterval(fetchData, 2 * 60 * 1000); // refresh every 2 min
+
+ document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchData();
+ });
 </script>
 </body>
 </html>
