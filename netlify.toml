@@ -3,14 +3,26 @@
 
 [build]
   publish = "."
-  functions = "netlify/functions"
+    functions = "netlify/functions"
 
-# The dashboard's JS already calls "/api/data" — the function's own
-# `config.path = "/api/data"` (see data.js) handles this route directly,
-# so no redirect rule is needed. This block is left here in case you later
-# rename the route and need an explicit redirect instead:
-#
-# [[redirects]]
-#   from = "/api/data"
-#   to = "/.netlify/functions/data"
-#   status = 200
+    # The dashboard's JS already calls "/api/data" — the function's own
+    # `config.path = "/api/data"` (see data.js) handles this route directly,
+    # so no redirect rule is needed. This block is left here in case you later
+    # rename the route and need an explicit redirect instead:
+    #
+    # [[redirects]]
+    #   from = "/api/data"
+    #   to = "/.netlify/functions/data"
+    #   status = 200
+
+    # Force the dashboard page itself to never be cached by the browser (or any
+    # CDN in between). Without this, a "refresh" — including an auto-refresh
+    # extension — can silently re-serve an old cached copy of index.html
+    # (running old JavaScript) instead of actually fetching the current one,
+    # which is exactly what caused a display to get stuck on stale data
+    # indefinitely despite regular refreshes.
+    [[headers]]
+      for = "/*"
+        [headers.values]
+            Cache-Control = "no-store, no-cache, must-revalidate, max-age=0"
+            
