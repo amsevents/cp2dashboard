@@ -831,37 +831,55 @@ function renderData(data) {
 }
 
 // ── Main fetch loop ───────────────────────────────────────────────────────────
+// Race-condition guard: if two fetchData() calls overlap (e.g. the 2-minute
+// timer fires right as the tab becomes visible again), there's no guarantee
+// they resolve in the order they started. Without this guard, a slower,
+// OLDER request finishing after a faster, NEWER one would silently overwrite
+// correct fresh data with stale data — with no error, no visible sign
+// anything went wrong. This tags each call with a sequence number and
+// discards any response that isn't from the most recently started call.
+let fetchSeq = 0;
+
 async function fetchData() {
+   const mySeq = ++fetchSeq;
+ 
   // Try live Python server first
   try {
-        const r = await fetch('/api/data', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-    if (r.ok) { renderData(await r.json()); return; }
+       const r = await fetch('/api/data', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
+       if (r.ok) {
+              const json = await r.json();
+              if (mySeq === fetchSeq) renderData(json); // discard if a newer call has since started
+         return;
+       }
   } catch (_) {}
+ 
+  if (mySeq !== fetchSeq) return; // a newer call started while this one failed — don't fall back over it
 
   // Fallback: live EIA diesel + sample data
   renderMotive(SAMPLE_MOTIVE);
-  const dieselData = await fetchDieselPrice();
+   const dieselData = await fetchDieselPrice();
+   if (mySeq !== fetchSeq) return; // re-check — the diesel fetch above was also async
+
   const now = new Date();
-  renderData({
-    diesel_price:  dieselData?.price  ?? null,
-    diesel_period: dieselData?.period ?? null,
-    fsc_rate:      dieselData ? getFSCRate(dieselData.price) : null,
-    loads:         SAMPLE_LOADS,
-    load_count:    SAMPLE_LOADS.length,
-    total_miles:   SAMPLE_LOADS.reduce((s,l) => s+l.miles, 0),
-    total_revenue: SAMPLE_LOADS.reduce((s,l) => s+l.revenue, 0),
-    last_updated:  now.toLocaleDateString('en-US') + ' ' +
-                   now.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true}),
-    errors: [],
-  });
+   renderData({
+        diesel_price:  dieselData?.price  ?? null,
+        diesel_period: dieselData?.period ?? null,
+        fsc_rate:      dieselData ? getFSCRate(dieselData.price) : null,
+        loads:         SAMPLE_LOADS,
+        load_count:    SAMPLE_LOADS.length,
+        total_miles:   SAMPLE_LOADS.reduce((s,l) => s+l.miles, 0),
+        total_revenue: SAMPLE_LOADS.reduce((s,l) => s+l.revenue, 0),
+        last_updated:  now.toLocaleDateString('en-US') + ' ' +
+                            now.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true}),
+        errors: [],
+   });
 }
 
 fetchData();
 setInterval(fetchData, 2 * 60 * 1000); // refresh every 2 min
 
- document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) fetchData();
- });
-</script>
+document.addEventListener('visibilitychange', () => {
+   if (!document.hidden) fetchData();
+});</script>
 </body>
 </html>
