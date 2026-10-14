@@ -315,7 +315,60 @@ async function fetchMtdRevenue() {
             }
 }
 
+async function fetchMtdDebug() {
+            try {
+                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
+                          const y = Number(parts.find((p) => p.type === "year").value);
+                          const m = Number(parts.find((p) => p.type === "month").value);
+                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
+                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
+                          if (h === 23) startMs += 3600000;
+                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
+                          const statuses = ["Open", "Quoted", "Reserved", "Covered", "Dispatched", "In Transit", "En-Route", "Delivered", "TONU", "Released", "Queued", "Invoiced", "Financed", "Completed", "Paid", "Trip Completed", "Released-Carrier Paid", "Carrier Paid"];
+                          const rows = [];
+                          let total = 0;
+                          for (let page = 0; page < 5; page++) {
+                                          const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
+                                                            Page: page,
+                                                            PageSize: 500,
+                                                            Status: statuses,
+                                                            UpdatedAtRange: { Start: new Date(startMs - 31 * 86400000).toISOString() },
+                                          });
+                                          const items = data.Items || [];
+                                          rows.push(...items);
+                                          total = data.Total || 0;
+                                          if (!items.length || rows.length >= total) break;
+                          }
+                          const inMonth = (d) => { if (!d) return false; const t = new Date(d).getTime(); return t >= startMs && t < endMs; };
+                          const sum = (pred) => {
+                                          let t = 0, c = 0;
+                                          for (const l of rows) {
+                                                            if (l.LoadType === "Non-Revenue") continue;
+                                                            if (pred(l)) { t += l.CustomerRate?.Amount ?? 0; c++; }
+                                          }
+                                          return { total: t, count: c };
+                          };
+                          return {
+                                          loads_fetched: rows.length,
+                                          loads_total_reported: total,
+                                          delivered_actual: sum((l) => inMonth(l.DeliveredAt)),
+                                          delivered_actual_or_sched: sum((l) => inMonth(l.DeliveredAt || l.ScheduledDeliveryAt)),
+                                          sched_delivery: sum((l) => inMonth(l.ScheduledDeliveryAt)),
+                                          picked_up_or_sched_pickup: sum((l) => inMonth(l.PickedUpAt || l.ScheduledPickupAt)),
+                                          sched_pickup: sum((l) => inMonth(l.ScheduledPickupAt)),
+                                          created: sum((l) => inMonth(l.CreatedAt)),
+                                          invoiced: sum((l) => inMonth(l.InvoicedAt)),
+                                          all_returned: sum(() => true),
+                          };
+            } catch (e) {
+                          return { error: e.message };
+            }
+}
+
 export default async function handler(request, context) {
+          if (new URL(request.url).searchParams.get("debug") === "mtd") {
+                    return new Response(JSON.stringify(await fetchMtdDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+          }
           const errors = [];
 
   const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
