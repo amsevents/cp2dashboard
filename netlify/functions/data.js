@@ -263,6 +263,7 @@ async function fetchMotive() {
                                                                                           hos_drive: formatDuration(at.drive),
                                                                                           hos_shift: formatDuration(at.shift),
                                                                                           hos_cycle: formatDuration(at.cycle),
+                                                                        hos_break: formatDuration(at.break),
                                                               };
                                     });
                       
