@@ -365,7 +365,63 @@ async function fetchMtdDebug() {
             }
 }
 
+async function fetchTripsDebug() {
+            try {
+                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
+                          const y = Number(parts.find((p) => p.type === "year").value);
+                          const m = Number(parts.find((p) => p.type === "month").value);
+                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
+                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
+                          if (h === 23) startMs += 3600000;
+                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
+                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
+                          const range = { Start: new Date(startMs).toISOString(), End: new Date(endMs).toISOString() };
+                          const pull = async (extra) => {
+                                          const rows = [];
+                                          for (let page = 0; page < 5; page++) {
+                                                            const data = await alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: page, PageSize: 500, Status: statuses, ...extra });
+                                                            const items = data.Items || [];
+                                                            rows.push(...items);
+                                                            if (!items.length || rows.length >= (data.Total || 0)) break;
+                                          }
+                                          return rows;
+                          };
+                          const byDelivery = await pull({ DeliveryDateRange: range });
+                          const byPickup = await pull({ PickupDateRange: range });
+                          const inM = (d) => { if (!d) return false; const t = new Date(d).getTime(); return t >= startMs && t < endMs; };
+                          const hasDriver = (t) => !!(t.Driver1 && t.Driver1.Id);
+                          const hasCarrier = (t) => !!(t.Carrier && t.Carrier.Id);
+                          const summarize = (rows, pred = () => true) => {
+                                          let n = 0, tv = 0, lm = 0, em = 0, tm = 0;
+                                          for (const t of rows) {
+                                                            if (!pred(t)) continue;
+                                                            n++;
+                                                            tv += t.TripValue?.Amount ?? 0;
+                                                            lm += t.LoadedMileage?.Distance?.Value ?? 0;
+                                                            em += t.EmptyMileage?.Distance?.Value ?? 0;
+                                                            tm += t.TotalMileage?.Distance?.Value ?? 0;
+                                          }
+                                          return { trips: n, trip_value: Math.round(tv * 100) / 100, loaded_miles: Math.round(lm), empty_miles: Math.round(em), total_miles: Math.round(tm) };
+                          };
+                          return {
+                                          by_delivery_range_all: summarize(byDelivery),
+                                          by_delivery_range_driver: summarize(byDelivery, hasDriver),
+                                          by_delivery_range_carrier: summarize(byDelivery, hasCarrier),
+                                          by_pickup_range_all: summarize(byPickup),
+                                          by_pickup_range_driver: summarize(byPickup, hasDriver),
+                                          by_pickup_range_carrier: summarize(byPickup, hasCarrier),
+                                          actual_delivered_in_month_driver: summarize(byDelivery, (t) => hasDriver(t) && inM(t.DeliveredAt)),
+                                          actual_pickedup_in_month_driver: summarize(byPickup, (t) => hasDriver(t) && inM(t.PickedUpAt)),
+                          };
+            } catch (e) {
+                          return { error: e.message };
+            }
+}
+
 export default async function handler(request, context) {
+          if (new URL(request.url).searchParams.get("debug") === "trips") {
+                    return new Response(JSON.stringify(await fetchTripsDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+          }
           if (new URL(request.url).searchParams.get("debug") === "mtd") {
                     return new Response(JSON.stringify(await fetchMtdDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
           }
