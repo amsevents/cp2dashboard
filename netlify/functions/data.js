@@ -16,6 +16,12 @@ const ALVYS_ENDPOINTS = {
 const EIA_KEY = "fEHQ6dpfd8Ti6ipbvdJj969fWAqmOPqiRfjEcF7P";
 const EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/";
 
+// MTD maintenance spend. Motive does not offer this through its API, so it is read
+// from Motive's report (Analytics > Reports > Maintenance history detail, this month)
+// and updated here by hand. The dashboard shows it as "as of" asOf, and hides it
+// if the month rolls over before this is updated.
+const MTD_MAINTENANCE = { month: "2026-10", amount: 465.48, asOf: "2026-10-14" };
+
 const FSC_MATRIX = [
           [3.20, 3.29, 0.00], [3.30, 3.39, 0.02], [3.40, 3.49, 0.03], [3.50, 3.59, 0.06],
           [3.60, 3.69, 0.08], [3.70, 3.79, 0.09], [3.80, 3.89, 0.11], [3.90, 3.99, 0.12],
@@ -351,6 +357,7 @@ export default async function handler(request, context) {
               motive: motiveResult.motive,
             mtd_revenue: mtdResult.total,
             mtd_label: mtdResult.label,
+            mtd_maintenance: MTD_MAINTENANCE,
               last_updated: now.toLocaleDateString("en-US") + " " +
                             now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
               errors,
