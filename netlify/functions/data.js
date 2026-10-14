@@ -273,18 +273,62 @@ async function fetchMotive() {
                           return { motive: { drivers: [] }, error: `Motive: ${e.message}` };
             }
 }
+async function fetchMtdRevenue() {
+            try {
+                          // Month start in Central time (CP2 is in Texas), converted to UTC.
+                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
+                          const y = Number(parts.find((p) => p.type === "year").value);
+                          const m = Number(parts.find((p) => p.type === "month").value);
+                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
+                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
+                          if (h === 23) startMs += 3600000; // standard time (UTC-6) instead of daylight (UTC-5)
+                          const monthStart = new Date(startMs);
+                          const label = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "long" }).format(new Date());
+                      
+                          // MTD revenue = customer rate on revenue loads delivered since the 1st.
+                          // Alvys DateRange filter only applies to created date, so we ask for
+                          // delivered-or-later loads updated this month, then filter on the actual
+                          // DeliveredAt timestamp (falling back to scheduled delivery if missing).
+                          let total = 0;
+                          let seen = 0;
+                          for (let page = 0; page < 5; page++) {
+                                          const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
+                                                            Page: page,
+                                                            PageSize: 500,
+                                                            Status: ["Delivered", "Invoiced", "Financed", "Completed", "Paid"],
+                                                            UpdatedAtRange: { Start: monthStart.toISOString() },
+                                          });
+                                          const items = data.Items || [];
+                                          for (const l of items) {
+                                                            if (l.LoadType === "Non-Revenue") continue;
+                                                            const when = l.DeliveredAt || l.ScheduledDeliveryAt;
+                                                            if (!when || new Date(when) < monthStart) continue;
+                                                            total += l.CustomerRate?.Amount ?? 0;
+                                          }
+                                          seen += items.length;
+                                          if (!items.length || seen >= (data.Total || 0)) break;
+                          }
+                          return { total, label, error: null };
+            } catch (e) {
+                          console.error("fetchMtdRevenue failed", e);
+                          return { total: null, label: "", error: `MTD revenue: ${e.message}` };
+            }
+}
+
 export default async function handler(request, context) {
           const errors = [];
 
-  const [loadsResult, dieselResult, motiveResult] = await Promise.all([
+  const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
               fetchLoads(),
               fetchDieselPrice(),
               fetchMotive(),
+            fetchMtdRevenue(),
             ]);
 
   if (loadsResult.error) errors.push(loadsResult.error);
           if (dieselResult.error) errors.push(dieselResult.error);
           if (motiveResult.error) errors.push(motiveResult.error);
+          if (mtdResult.error) errors.push(mtdResult.error);
 
   const fscRate = getFscRate(dieselResult.price);
           const now = new Date();
@@ -298,6 +342,8 @@ export default async function handler(request, context) {
               total_miles: loadsResult.totalMiles,
               total_revenue: loadsResult.totalRevenue,
               motive: motiveResult.motive,
+            mtd_revenue: mtdResult.total,
+            mtd_label: mtdResult.label,
               last_updated: now.toLocaleDateString("en-US") + " " +
                             now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
               errors,
