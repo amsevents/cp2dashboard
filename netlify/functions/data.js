@@ -321,35 +321,8 @@ async function fetchMtdRevenue() {
                           return { total: null, label: "", error: `MTD revenue: ${e.message}` };
             }
 }
-async function fetchMotiveProbe() {
-            const key = process.env.MOTIVE_API_KEY;
-            const urls = [
-                          "https://api.gomotive.com/api/w3/reports/maintenance_history_detail?start_date=2026-10-01&end_date=2026-10-31",
-                          "https://api.keeptruckin.com/api/w3/reports/maintenance_history_detail?start_date=2026-10-01&end_date=2026-10-31",
-                          "https://api.gomotive.com/v1/maintenance_history?start_date=2026-10-01&end_date=2026-10-31",
-                          "https://api.gomotive.com/v1/maintenance_records",
-                          "https://api.gomotive.com/v1/service_history",
-                          "https://api.gomotive.com/v1/maintenance",
-                          "https://api.gomotive.com/v2/maintenance_records",
-                          "https://api.gomotive.com/v1/work_orders",
-                        ];
-            const out = [];
-            for (const u of urls) {
-                          try {
-                                          const r = await fetch(u, { headers: { "X-Api-Key": key } });
-                                          const t = await r.text();
-                                          out.push({ u: u.replace("https://", ""), s: r.status, b: t.slice(0, 200) });
-                          } catch (e) {
-                                          out.push({ u, err: e.message });
-                          }
-            }
-            return out;
-}
 
 export default async function handler(request, context) {
-          if (new URL(request.url).searchParams.get("debug") === "mprobe") {
-                    return new Response(JSON.stringify(await fetchMotiveProbe()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-          }
           const errors = [];
 
   const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
