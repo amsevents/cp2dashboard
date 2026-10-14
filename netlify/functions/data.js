@@ -275,35 +275,42 @@ async function fetchMotive() {
 }
 async function fetchMtdRevenue() {
             try {
-                          // Month start in Central time (CP2 is in Texas), converted to UTC.
-                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
+                          // Matches the Alvys month-to-date summary: company-fleet trips (a driver
+                          // assigned from CP2's own fleet, not outside carriers) whose delivery
+                          // date falls between the 1st and the end of today, Central time.
+                          // Value = TripValue, the same "Trip Value" Alvys totals.
+                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric", day: "numeric" }).formatToParts(new Date());
                           const y = Number(parts.find((p) => p.type === "year").value);
                           const m = Number(parts.find((p) => p.type === "month").value);
-                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
-                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
-                          if (h === 23) startMs += 3600000; // standard time (UTC-6) instead of daylight (UTC-5)
-                          const monthStart = new Date(startMs);
+                          const day = Number(parts.find((p) => p.type === "day").value);
+                          const centralMidnight = (yy, mm, dd) => {
+                                          let t = Date.UTC(yy, mm, dd, 5, 0, 0);
+                                          const hh = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(t)));
+                                          if (hh === 23) t += 3600000; // standard time (UTC-6) instead of daylight (UTC-5)
+                                          return t;
+                          };
+                          const startMs = centralMidnight(y, m - 1, 1);
+                          const endMs = centralMidnight(y, m - 1, day + 1);
                           const label = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", month: "long" }).format(new Date());
-                      
-                          // MTD revenue = customer rate on revenue loads delivered since the 1st.
-                          // Alvys DateRange filter only applies to created date, so we ask for
-                          // delivered-or-later loads updated this month, then filter on the actual
-                          // DeliveredAt timestamp (falling back to scheduled delivery if missing).
+                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
                           let total = 0;
                           let seen = 0;
                           for (let page = 0; page < 5; page++) {
-                                          const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
+                                          const data = await alvysPost(ALVYS_ENDPOINTS.tripsSearch, {
                                                             Page: page,
                                                             PageSize: 500,
-                                                            Status: ["Delivered", "TONU", "Released", "Queued", "Invoiced", "Financed", "Completed", "Paid", "Trip Completed", "Released-Carrier Paid", "Carrier Paid"],
-                                                            UpdatedAtRange: { Start: monthStart.toISOString() },
+                                                            Status: statuses,
+                                                            DeliveryDateRange: { Start: new Date(startMs - 86400000).toISOString(), End: new Date(endMs + 2 * 86400000).toISOString() },
                                           });
                                           const items = data.Items || [];
-                                          for (const l of items) {
-                                                            if (l.LoadType === "Non-Revenue") continue;
-                                                            const when = l.DeliveredAt || l.ScheduledDeliveryAt;
-                                                            if (!when || new Date(when) < monthStart) continue;
-                                                            total += l.CustomerRate?.Amount ?? 0;
+                                          for (const t of items) {
+                                                            const fleet = t.Driver1 && t.Driver1.Fleet;
+                                                            if (!(fleet && (fleet.Id || fleet.Name))) continue;
+                                                            const when = t.DeliveredAt || t.DeliveryDate;
+                                                            if (!when) continue;
+                                                            const ms = new Date(when).getTime();
+                                                            if (ms < startMs || ms >= endMs) continue;
+                                                            total += t.TripValue?.Amount ?? 0;
                                           }
                                           seen += items.length;
                                           if (!items.length || seen >= (data.Total || 0)) break;
@@ -314,167 +321,7 @@ async function fetchMtdRevenue() {
                           return { total: null, label: "", error: `MTD revenue: ${e.message}` };
             }
 }
-
-async function fetchMtdDebug() {
-            try {
-                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
-                          const y = Number(parts.find((p) => p.type === "year").value);
-                          const m = Number(parts.find((p) => p.type === "month").value);
-                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
-                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
-                          if (h === 23) startMs += 3600000;
-                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
-                          const statuses = ["Open", "Quoted", "Reserved", "Covered", "Dispatched", "In Transit", "En-Route", "Delivered", "TONU", "Released", "Queued", "Invoiced", "Financed", "Completed", "Paid", "Trip Completed", "Released-Carrier Paid", "Carrier Paid"];
-                          const rows = [];
-                          let total = 0;
-                          for (let page = 0; page < 5; page++) {
-                                          const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
-                                                            Page: page,
-                                                            PageSize: 500,
-                                                            Status: statuses,
-                                                            UpdatedAtRange: { Start: new Date(startMs - 31 * 86400000).toISOString() },
-                                          });
-                                          const items = data.Items || [];
-                                          rows.push(...items);
-                                          total = data.Total || 0;
-                                          if (!items.length || rows.length >= total) break;
-                          }
-                          const inMonth = (d) => { if (!d) return false; const t = new Date(d).getTime(); return t >= startMs && t < endMs; };
-                          const sum = (pred) => {
-                                          let t = 0, c = 0;
-                                          for (const l of rows) {
-                                                            if (l.LoadType === "Non-Revenue") continue;
-                                                            if (pred(l)) { t += l.CustomerRate?.Amount ?? 0; c++; }
-                                          }
-                                          return { total: t, count: c };
-                          };
-                          return {
-                                          loads_fetched: rows.length,
-                                          loads_total_reported: total,
-                                          delivered_actual: sum((l) => inMonth(l.DeliveredAt)),
-                                          delivered_actual_or_sched: sum((l) => inMonth(l.DeliveredAt || l.ScheduledDeliveryAt)),
-                                          sched_delivery: sum((l) => inMonth(l.ScheduledDeliveryAt)),
-                                          picked_up_or_sched_pickup: sum((l) => inMonth(l.PickedUpAt || l.ScheduledPickupAt)),
-                                          sched_pickup: sum((l) => inMonth(l.ScheduledPickupAt)),
-                                          created: sum((l) => inMonth(l.CreatedAt)),
-                                          invoiced: sum((l) => inMonth(l.InvoicedAt)),
-                                          all_returned: sum(() => true),
-                          };
-            } catch (e) {
-                          return { error: e.message };
-            }
-}
-
-async function fetchTripsDebug() {
-            try {
-                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
-                          const y = Number(parts.find((p) => p.type === "year").value);
-                          const m = Number(parts.find((p) => p.type === "month").value);
-                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
-                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
-                          if (h === 23) startMs += 3600000;
-                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
-                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
-                          const range = { Start: new Date(startMs).toISOString(), End: new Date(endMs).toISOString() };
-                          const pull = async (extra) => {
-                                          const rows = [];
-                                          for (let page = 0; page < 5; page++) {
-                                                            const data = await alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: page, PageSize: 500, Status: statuses, ...extra });
-                                                            const items = data.Items || [];
-                                                            rows.push(...items);
-                                                            if (!items.length || rows.length >= (data.Total || 0)) break;
-                                          }
-                                          return rows;
-                          };
-                          const byDelivery = await pull({ DeliveryDateRange: range });
-                          const byPickup = await pull({ PickupDateRange: range });
-                          const inM = (d) => { if (!d) return false; const t = new Date(d).getTime(); return t >= startMs && t < endMs; };
-                          const hasDriver = (t) => !!(t.Driver1 && t.Driver1.Id);
-                          const hasCarrier = (t) => !!(t.Carrier && t.Carrier.Id);
-                          const summarize = (rows, pred = () => true) => {
-                                          let n = 0, tv = 0, lm = 0, em = 0, tm = 0;
-                                          for (const t of rows) {
-                                                            if (!pred(t)) continue;
-                                                            n++;
-                                                            tv += t.TripValue?.Amount ?? 0;
-                                                            lm += t.LoadedMileage?.Distance?.Value ?? 0;
-                                                            em += t.EmptyMileage?.Distance?.Value ?? 0;
-                                                            tm += t.TotalMileage?.Distance?.Value ?? 0;
-                                          }
-                                          return { trips: n, trip_value: Math.round(tv * 100) / 100, loaded_miles: Math.round(lm), empty_miles: Math.round(em), total_miles: Math.round(tm) };
-                          };
-                          return {
-                                          by_delivery_range_all: summarize(byDelivery),
-                                          by_delivery_range_driver: summarize(byDelivery, hasDriver),
-                                          by_delivery_range_carrier: summarize(byDelivery, hasCarrier),
-                                          by_pickup_range_all: summarize(byPickup),
-                                          by_pickup_range_driver: summarize(byPickup, hasDriver),
-                                          by_pickup_range_carrier: summarize(byPickup, hasCarrier),
-                                          actual_delivered_in_month_driver: summarize(byDelivery, (t) => hasDriver(t) && inM(t.DeliveredAt)),
-                                          actual_pickedup_in_month_driver: summarize(byPickup, (t) => hasDriver(t) && inM(t.PickedUpAt)),
-                          };
-            } catch (e) {
-                          return { error: e.message };
-            }
-}
-
-async function fetchTripsRows() {
-            try {
-                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
-                          const y = Number(parts.find((p) => p.type === "year").value);
-                          const m = Number(parts.find((p) => p.type === "month").value);
-                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
-                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
-                          if (h === 23) startMs += 3600000;
-                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
-                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
-                          const range = { Start: new Date(startMs - 86400000).toISOString(), End: new Date(endMs + 86400000).toISOString() };
-                          const pull = async (extra) => {
-                                          const rows = [];
-                                          for (let page = 0; page < 5; page++) {
-                                                            const data = await alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: page, PageSize: 500, Status: statuses, ...extra });
-                                                            const items = data.Items || [];
-                                                            rows.push(...items);
-                                                            if (!items.length || rows.length >= (data.Total || 0)) break;
-                                          }
-                                          return rows;
-                          };
-                          const all = [...(await pull({ DeliveryDateRange: range })), ...(await pull({ PickupDateRange: range }))];
-                          const seen = new Map();
-                          for (const t of all) seen.set(t.Id, t);
-                          const rows = [...seen.values()].map((t) => ({
-                                          trip: t.TripNumber,
-                                          load: t.LoadNumber,
-                                          status: t.Status,
-                                          picked: t.PickedUpAt || null,
-                                          pickSched: t.PickupDate || null,
-                                          delivered: t.DeliveredAt || null,
-                                          delSched: t.DeliveryDate || null,
-                                          value: t.TripValue?.Amount ?? null,
-                                          lm: t.LoadedMileage?.Distance?.Value ?? null,
-                                          em: t.EmptyMileage?.Distance?.Value ?? null,
-                                          d1: t.Driver1?.Id ? (t.Driver1.ContractorType || "driver") : null,
-                                          d1Fleet: t.Driver1?.Fleet?.Name || null,
-                                          truckFleet: t.Truck?.Fleet?.Name || null,
-                                          oo: !!(t.OwnerOperator && t.OwnerOperator.Id),
-                                          carrier: !!(t.Carrier && t.Carrier.Id),
-                          }));
-                          return { count: rows.length, rows };
-            } catch (e) {
-                          return { error: e.message };
-            }
-}
-
 export default async function handler(request, context) {
-          if (new URL(request.url).searchParams.get("debug") === "tripsrows") {
-                    return new Response(JSON.stringify(await fetchTripsRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-          }
-          if (new URL(request.url).searchParams.get("debug") === "trips") {
-                    return new Response(JSON.stringify(await fetchTripsDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-          }
-          if (new URL(request.url).searchParams.get("debug") === "mtd") {
-                    return new Response(JSON.stringify(await fetchMtdDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
-          }
           const errors = [];
 
   const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
