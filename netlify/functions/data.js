@@ -295,7 +295,7 @@ async function fetchMtdRevenue() {
                                           const data = await alvysPost(ALVYS_ENDPOINTS.loadsSearch, {
                                                             Page: page,
                                                             PageSize: 500,
-                                                            Status: ["Delivered", "Invoiced", "Financed", "Completed", "Paid"],
+                                                            Status: ["Delivered", "TONU", "Released", "Queued", "Invoiced", "Financed", "Completed", "Paid", "Trip Completed", "Released-Carrier Paid", "Carrier Paid"],
                                                             UpdatedAtRange: { Start: monthStart.toISOString() },
                                           });
                                           const items = data.Items || [];
