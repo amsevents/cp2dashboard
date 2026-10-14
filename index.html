@@ -755,10 +755,11 @@ function renderMotive(m) {
     return 'Off Duty';
   }
   el.innerHTML = drivers.map(d => {
-    const hosStr = d.hos_drive
-      ? `<span class="driver-hos">🕐 <strong>${d.hos_drive}</strong> drive left</span>`
-      : (d.hos_shift ? `<span class="driver-hos">🕐 <strong>${d.hos_shift}</strong> shift left</span>` : '');
-    const locStr = d.location ? `<span class="driver-loc">📍 ${d.location}</span>` : '';
+    const hosParts = [['Drive', d.hos_drive], ['Shift', d.hos_shift], ['Break', d.hos_break], ['Cycle', d.hos_cycle]].filter(p => p[1]);
+   const hosStr = hosParts.length
+    ? `<span class="driver-hos" style="display:flex;flex-wrap:wrap;gap:4px 14px">${hosParts.map(p => `<span>${p[0]} <strong>${p[1]}</strong></span>`).join('')}</span>`
+    : '';
+   const locStr = d.location ? `<span class="driver-loc">📍 ${d.location}</span>` : '';
     const truckTag = d.vehicle ? `<span class="driver-truck">Truck ${d.vehicle}</span>` : '';
     return `
       <div class="driver-card ${sc(d.status)}">
