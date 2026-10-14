@@ -750,7 +750,7 @@ function renderMotive(m) {
   }
   function sl(s) {
     if (s === 'driving')             return 'Driving';
-    if (s === 'on_duty_not_driving') return 'On Duty';
+        if (s === 'on_duty_not_driving' || s === 'on_duty') return 'On Duty';
     if (s === 'sleeper_berth')       return 'Sleeper';
     return 'Off Duty';
   }
