@@ -91,6 +91,8 @@
     line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums;
   }
   .fuel-unit { font-size: 11px; color: rgba(0,0,0,0.5); letter-spacing: 1px; margin-top: 1px; }
+ .fuel-strip .fuel-cell:nth-child(3) { background: #c9f2d0; }
+ .fuel-strip .fuel-cell:nth-child(4) { background: #f7c6c6; }
 
   /* ── MAIN CONTENT: left (loads) | right (AR + fleet) ── */
   .main-content {
@@ -518,6 +520,11 @@
       <div class="fuel-val" id="mtd-revenue">$--</div>
       <div class="fuel-unit">company fleet trips, month to date</div>
      </div>
+   <div class="fuel-cell">
+    <div class="fuel-lbl" id="maint-label">MTD Maintenance</div>
+    <div class="fuel-val" id="maint-val">$--</div>
+    <div class="fuel-unit" id="maint-unit">Motive, month to date</div>
+     </div>
   </div>
 
   <!-- TAB AREA -->
@@ -789,7 +796,19 @@ function renderData(data) {
     }
   }
 
-  // MTD revenue
+  // MTD maintenance (typed in from Motive's report; see MTD_MAINTENANCE in data.js)
+ if (data.mtd_maintenance) {
+  const mm = data.mtd_maintenance;
+  const nowMonth = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Chicago' }).slice(0, 7);
+  const isCurrent = mm.month === nowMonth;
+  const monthName = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', month: 'long' });
+  document.getElementById('maint-label').textContent = 'MTD Maintenance · ' + monthName;
+  document.getElementById('maint-val').textContent = isCurrent ? '$' + Number(mm.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$--';
+  const asOf = new Date(mm.asOf + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  document.getElementById('maint-unit').textContent = isCurrent ? 'Motive, as of ' + asOf : 'awaiting update from Motive';
+ }
+ 
+ // MTD revenue
  if (data.mtd_revenue != null) {
   document.getElementById('mtd-revenue').textContent = fmtRev(data.mtd_revenue);
   document.getElementById('mtd-label').textContent = 'MTD Revenue' + (data.mtd_label ? ' · ' + data.mtd_label : '');
@@ -852,40 +871,34 @@ function renderData(data) {
 // discards any response that isn't from the most recently started call.
 let fetchSeq = 0;
 
-async function fetchData() {
-   const mySeq = ++fetchSeq;
- 
-  // Try live Python server first
-  try {
-       const r = await fetch('/api/data', { cache: 'no-store', signal: AbortSignal.timeout(3000) });
-       if (r.ok) {
-              const json = await r.json();
-              if (mySeq === fetchSeq) renderData(json); // discard if a newer call has since started
-         return;
-       }
-  } catch (_) {}
- 
-  if (mySeq !== fetchSeq) return; // a newer call started while this one failed — don't fall back over it
+let lastGoodAt = null;
 
-  // Fallback: live EIA diesel + sample data
-  renderMotive(SAMPLE_MOTIVE);
-   const dieselData = await fetchDieselPrice();
-   if (mySeq !== fetchSeq) return; // re-check — the diesel fetch above was also async
-
-  const now = new Date();
-   renderData({
-        diesel_price:  dieselData?.price  ?? null,
-        diesel_period: dieselData?.period ?? null,
-        fsc_rate:      dieselData ? getFSCRate(dieselData.price) : null,
-        loads:         SAMPLE_LOADS,
-        load_count:    SAMPLE_LOADS.length,
-        total_miles:   SAMPLE_LOADS.reduce((s,l) => s+l.miles, 0),
-        total_revenue: SAMPLE_LOADS.reduce((s,l) => s+l.revenue, 0),
-        last_updated:  now.toLocaleDateString('en-US') + ' ' +
-                            now.toLocaleTimeString('en-US', {hour:'numeric', minute:'2-digit', hour12:true}),
-        errors: [],
-   });
-}
+ async function fetchData() {
+    const mySeq = ++fetchSeq;
+    try {
+         // 30 seconds, not 3: the live data makes several calls to Alvys and Motive
+         // and can legitimately take a few seconds. The old 3-second limit made the
+         // page silently swap in hardcoded sample data, which is what caused the
+         // screen to randomly show old loads and drivers.
+         const r = await fetch('/api/data', { cache: 'no-store', signal: AbortSignal.timeout(30000) });
+         if (!r.ok) throw new Error('HTTP ' + r.status);
+         const json = await r.json();
+         if (mySeq !== fetchSeq) return; // a newer request has started, ignore this one
+         lastGoodAt = new Date();
+         renderData(json);
+    } catch (e) {
+         if (mySeq !== fetchSeq) return;
+         // Never show sample data. Keep the last real data on screen and say plainly
+         // that the latest refresh did not work.
+         const errBar = document.getElementById('error-bar');
+         if (errBar) {
+                errBar.textContent = lastGoodAt
+                  ? '⚠ Could not refresh. Showing data from ' + lastGoodAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) + '. Retrying.'
+                         : '⚠ Could not load data. Retrying.';
+                errBar.style.display = 'block';
+         }
+    }
+ }
 
 fetchData();
 setInterval(fetchData, 2 * 60 * 1000); // refresh every 2 min
