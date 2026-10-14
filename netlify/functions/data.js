@@ -418,7 +418,57 @@ async function fetchTripsDebug() {
             }
 }
 
+async function fetchTripsRows() {
+            try {
+                          const parts = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "numeric" }).formatToParts(new Date());
+                          const y = Number(parts.find((p) => p.type === "year").value);
+                          const m = Number(parts.find((p) => p.type === "month").value);
+                          let startMs = Date.UTC(y, m - 1, 1, 5, 0, 0);
+                          const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", hour: "numeric", hourCycle: "h23" }).format(new Date(startMs)));
+                          if (h === 23) startMs += 3600000;
+                          const endMs = Date.UTC(y, m, 1, 6, 0, 0);
+                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
+                          const range = { Start: new Date(startMs - 86400000).toISOString(), End: new Date(endMs + 86400000).toISOString() };
+                          const pull = async (extra) => {
+                                          const rows = [];
+                                          for (let page = 0; page < 5; page++) {
+                                                            const data = await alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: page, PageSize: 500, Status: statuses, ...extra });
+                                                            const items = data.Items || [];
+                                                            rows.push(...items);
+                                                            if (!items.length || rows.length >= (data.Total || 0)) break;
+                                          }
+                                          return rows;
+                          };
+                          const all = [...(await pull({ DeliveryDateRange: range })), ...(await pull({ PickupDateRange: range }))];
+                          const seen = new Map();
+                          for (const t of all) seen.set(t.Id, t);
+                          const rows = [...seen.values()].map((t) => ({
+                                          trip: t.TripNumber,
+                                          load: t.LoadNumber,
+                                          status: t.Status,
+                                          picked: t.PickedUpAt || null,
+                                          pickSched: t.PickupDate || null,
+                                          delivered: t.DeliveredAt || null,
+                                          delSched: t.DeliveryDate || null,
+                                          value: t.TripValue?.Amount ?? null,
+                                          lm: t.LoadedMileage?.Distance?.Value ?? null,
+                                          em: t.EmptyMileage?.Distance?.Value ?? null,
+                                          d1: t.Driver1?.Id ? (t.Driver1.ContractorType || "driver") : null,
+                                          d1Fleet: t.Driver1?.Fleet?.Name || null,
+                                          truckFleet: t.Truck?.Fleet?.Name || null,
+                                          oo: !!(t.OwnerOperator && t.OwnerOperator.Id),
+                                          carrier: !!(t.Carrier && t.Carrier.Id),
+                          }));
+                          return { count: rows.length, rows };
+            } catch (e) {
+                          return { error: e.message };
+            }
+}
+
 export default async function handler(request, context) {
+          if (new URL(request.url).searchParams.get("debug") === "tripsrows") {
+                    return new Response(JSON.stringify(await fetchTripsRows()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+          }
           if (new URL(request.url).searchParams.get("debug") === "trips") {
                     return new Response(JSON.stringify(await fetchTripsDebug()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
           }
