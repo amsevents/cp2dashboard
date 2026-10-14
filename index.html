@@ -513,6 +513,11 @@
       <div class="fuel-val" id="fsc-rate">$-.--</div>
       <div class="fuel-unit">per mile</div>
     </div>
+     <div class="fuel-cell">
+      <div class="fuel-lbl" id="mtd-label">MTD Revenue</div>
+      <div class="fuel-val" id="mtd-revenue">$--</div>
+      <div class="fuel-unit">delivered loads this month</div>
+     </div>
   </div>
 
   <!-- TAB AREA -->
@@ -784,7 +789,13 @@ function renderData(data) {
     }
   }
 
-  // FSC rate
+  // MTD revenue
+ if (data.mtd_revenue != null) {
+  document.getElementById('mtd-revenue').textContent = fmtRev(data.mtd_revenue);
+  document.getElementById('mtd-label').textContent = 'MTD Revenue' + (data.mtd_label ? ' · ' + data.mtd_label : '');
+ }
+ 
+ // FSC rate
   if (data.fsc_rate != null) {
     document.getElementById('fsc-rate').textContent = '$' + data.fsc_rate.toFixed(2);
   }
