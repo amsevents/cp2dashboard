@@ -106,6 +106,18 @@ async function alvysPost(path, body) {
           return resp.json();
 }
 
+// Truck and trailer numbers rarely change, so each one is looked up from Alvys once
+// and remembered while this function instance stays warm (keeps API calls low).
+const assetNumCache = {};
+async function lookupAssetNumber(kind, id) {
+            const key = kind + ":" + id;
+            if (assetNumCache[key]) return assetNumCache[key];
+            const data = await alvysGet(`/api/p/v${ALVYS_API_VERSION}/${kind}/${id}`);
+            const num = data.TruckNum ?? data.TrailerNum ?? data.truckNum ?? data.trailerNum ?? null;
+            if (num) assetNumCache[key] = num;
+            return num;
+}
+
 async function fetchDispatcherNames(loadNumbers) {
           if (!loadNumbers.length) return { names: {}, drivers: {}, error: null };
 
@@ -140,14 +152,33 @@ async function fetchDispatcherNames(loadNumbers) {
             const rawDrivers = driversData.Items || driversData.items || (Array.isArray(driversData) ? driversData : []);
             for (const d of rawDrivers) driverNameById[d.Id ?? d.id] = d.Name ?? d.name;
             const drivers = {};
+            const truckIds = {};
+            const trailerIds = {};
             for (const t of rawTrips) {
                       const loadNum = t.LoadNumber ?? t.loadNumber;
                       const n1 = t.Driver1 && t.Driver1.Id ? driverNameById[t.Driver1.Id] : null;
                       const n2 = t.Driver2 && t.Driver2.Id ? driverNameById[t.Driver2.Id] : null;
                       const label = [n1, n2].filter(Boolean).join(" & ");
                       if (loadNum && label && !drivers[loadNum]) drivers[loadNum] = label;
+                      if (loadNum && t.Truck && t.Truck.Id && !truckIds[loadNum]) truckIds[loadNum] = t.Truck.Id;
+                      if (loadNum && t.Trailer && t.Trailer.Id && !trailerIds[loadNum]) trailerIds[loadNum] = t.Trailer.Id;
             }
-            return { names, drivers, error: driversData.__error ? `Drivers: ${driversData.__error}` : null };
+            const trucks = {};
+            const trailers = {};
+            let equipError = null;
+            const resolveAll = async (ids, kind, out) => {
+                      await Promise.all(Object.entries(ids).map(async ([loadNum, id]) => {
+                                try {
+                                          const num = await lookupAssetNumber(kind, id);
+                                          if (num) out[loadNum] = num;
+                                } catch (e) {
+                                          equipError = equipError || `Equipment: ${e.message}`;
+                                }
+                      }));
+            };
+            await resolveAll(truckIds, "trucks", trucks);
+            await resolveAll(trailerIds, "trailers", trailers);
+            return { names, drivers, trucks, trailers, error: driversData.__error ? `Drivers: ${driversData.__error}` : equipError };
   } catch (e) {
               console.error("fetchDispatcherNames failed", e);
               return { names: {}, drivers: {}, error: `Dispatchers: ${e.message}` };
@@ -190,12 +221,14 @@ async function fetchLoads() {
                                     };
                       });
 
-            const { names: dispatcherNames, drivers: driverNames, error: dispatcherError } =
+            const { names: dispatcherNames, drivers: driverNames, trucks: truckNums, trailers: trailerNums, error: dispatcherError } =
                           await fetchDispatcherNames(parsedLoads.map((l) => l.id));
                       const loads = parsedLoads.map((l) => ({
                                     ...l,
                                     agent: dispatcherNames[l.id] || "—",
                                 driver: driverNames[l.id] || "—",
+                                truck: (truckNums && truckNums[l.id]) || "—",
+                                trailer: (trailerNums && trailerNums[l.id]) || "—",
                       }));
 
             return {
@@ -270,7 +303,32 @@ async function fetchMotive() {
                                                           return `${h}:${String(m).padStart(2, "0")}`;
                                   }
 
-                                  const drivers = rawEntries
+                                  // Last tracked location for each driver (works for off-duty drivers too).
+                      let locById = {};
+                      let locError = null;
+                      try {
+                                const lr = await fetch(`${MOTIVE_API_BASE}/v1/driver_locations?per_page=100`, { headers: { "X-Api-Key": apiKey } });
+                                if (!lr.ok) throw new Error(`${lr.status} ${await lr.text()}`);
+                                const ld = await lr.json();
+                                const lEntries = ld.users || ld.drivers || (Array.isArray(ld) ? ld : []);
+                                for (const e of lEntries) {
+                                          const lu = e.user || e;
+                                          const cl = lu.current_location;
+                                          if (lu.id != null && cl) locById[lu.id] = { desc: cl.description || "", at: cl.located_at || null };
+                                }
+                      } catch (e) {
+                                locError = `Motive locations: ${e.message}`;
+                      }
+                      const cleanLoc = (l) => {
+                                if (!l || !l.desc) return "";
+                                let d = l.desc.replace(/^[\d.]+\s*(mi|km)\s+[NSEW]{1,3}\s+of\s+/i, "");
+                                if (l.at && Date.now() - new Date(l.at).getTime() > 12 * 3600 * 1000) {
+                                          d += " (" + new Date(l.at).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ")";
+                                }
+                                return d;
+                      };
+                      
+                      const drivers = rawEntries
                                     .map((entry) => entry.user || entry)
                                     .filter((u) => u.status !== "deactivated")
                                     .map((u) => {
@@ -279,7 +337,7 @@ async function fetchMotive() {
                                                                                           name: u.first_name ? `${u.first_name} ${u.last_name || ""}`.trim() : u.name || "—",
                                                                                           vehicle: "",
                                                                                           status: u.duty_status || "",
-                                                                                          location: "",
+                                                                                          location: cleanLoc(locById[u.id]),
                                                                                           hos_drive: formatDuration(at.drive),
                                                                                           hos_shift: formatDuration(at.shift),
                                                                                           hos_cycle: formatDuration(at.cycle),
@@ -287,7 +345,7 @@ async function fetchMotive() {
                                                               };
                                     });
                       
-                          return { motive: { drivers }, error: null };
+                          return { motive: { drivers }, error: locError };
             } catch (e) {
                           console.error("fetchMotive failed", e);
                           return { motive: { drivers: [] }, error: `Motive: ${e.message}` };
