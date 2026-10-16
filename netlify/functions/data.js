@@ -430,8 +430,8 @@ export default async function handler(request, context) {
             mtd_revenue: mtdResult.total,
             mtd_label: mtdResult.label,
             mtd_maintenance: MTD_MAINTENANCE,
-              last_updated: now.toLocaleDateString("en-US") + " " +
-                            now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }),
+              last_updated: now.toLocaleDateString("en-US", { timeZone: "America/Chicago" }) + " " +
+                            now.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", hour12: true }),
               errors,
   };
 
