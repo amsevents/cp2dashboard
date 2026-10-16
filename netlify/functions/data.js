@@ -117,7 +117,7 @@ async function fetchDispatcherNames(loadNumbers) {
                                             LoadNumbers: loadNumbers,
                             }),
                             alvysGet(ALVYS_ENDPOINTS.usersList),
-                        alvysPost(ALVYS_ENDPOINTS.driversSearch, { Page: 0, PageSize: 500 }).catch((e) => ({ __error: e.message })),
+                        alvysPost(ALVYS_ENDPOINTS.driversSearch, { Page: 0, PageSize: 200, IsActive: true }).catch((e) => ({ __error: e.message })),
                           ]);
 
             const rawTrips = tripsData.Items || tripsData.items || (Array.isArray(tripsData) ? tripsData : []);
