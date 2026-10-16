@@ -11,6 +11,7 @@ const ALVYS_ENDPOINTS = {
           loadsSearch: `/api/p/v${ALVYS_API_VERSION}/loads/search`,
           tripsSearch: `/api/p/v${ALVYS_API_VERSION}/trips/search`,
           usersList: `/api/p/v${ALVYS_API_VERSION}/users/list`,
+          driversSearch: `/api/p/v${ALVYS_API_VERSION}/drivers/search`,
 };
 
 const EIA_KEY = "fEHQ6dpfd8Ti6ipbvdJj969fWAqmOPqiRfjEcF7P";
@@ -106,16 +107,17 @@ async function alvysPost(path, body) {
 }
 
 async function fetchDispatcherNames(loadNumbers) {
-          if (!loadNumbers.length) return { names: {}, error: null };
+          if (!loadNumbers.length) return { names: {}, drivers: {}, error: null };
 
   try {
-              const [tripsData, usersData] = await Promise.all([
+              const [tripsData, usersData, driversData] = await Promise.all([
                             alvysPost(ALVYS_ENDPOINTS.tripsSearch, {
                                             Page: 0,
                                             PageSize: 200,
                                             LoadNumbers: loadNumbers,
                             }),
                             alvysGet(ALVYS_ENDPOINTS.usersList),
+                        alvysPost(ALVYS_ENDPOINTS.driversSearch, { Page: 0, PageSize: 500 }).catch((e) => ({ __error: e.message })),
                           ]);
 
             const rawTrips = tripsData.Items || tripsData.items || (Array.isArray(tripsData) ? tripsData : []);
@@ -134,10 +136,21 @@ async function fetchDispatcherNames(loadNumbers) {
                                             names[loadNum] = nameById[dispatcherId];
                             }
               }
-              return { names, error: null };
+              const driverNameById = {};
+            const rawDrivers = driversData.Items || driversData.items || (Array.isArray(driversData) ? driversData : []);
+            for (const d of rawDrivers) driverNameById[d.Id ?? d.id] = d.Name ?? d.name;
+            const drivers = {};
+            for (const t of rawTrips) {
+                      const loadNum = t.LoadNumber ?? t.loadNumber;
+                      const n1 = t.Driver1 && t.Driver1.Id ? driverNameById[t.Driver1.Id] : null;
+                      const n2 = t.Driver2 && t.Driver2.Id ? driverNameById[t.Driver2.Id] : null;
+                      const label = [n1, n2].filter(Boolean).join(" & ");
+                      if (loadNum && label && !drivers[loadNum]) drivers[loadNum] = label;
+            }
+            return { names, drivers, error: driversData.__error ? `Drivers: ${driversData.__error}` : null };
   } catch (e) {
               console.error("fetchDispatcherNames failed", e);
-              return { names: {}, error: `Dispatchers: ${e.message}` };
+              return { names: {}, drivers: {}, error: `Dispatchers: ${e.message}` };
   }
 }
 
@@ -177,11 +190,12 @@ async function fetchLoads() {
                                     };
                       });
 
-            const { names: dispatcherNames, error: dispatcherError } =
+            const { names: dispatcherNames, drivers: driverNames, error: dispatcherError } =
                           await fetchDispatcherNames(parsedLoads.map((l) => l.id));
                       const loads = parsedLoads.map((l) => ({
                                     ...l,
                                     agent: dispatcherNames[l.id] || "—",
+                                driver: driverNames[l.id] || "—",
                       }));
 
             return {
