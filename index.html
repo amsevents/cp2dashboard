@@ -97,7 +97,7 @@
   /* ── MAIN CONTENT: left (loads) | right (AR + fleet) ── */
   .main-content {
     display: grid;
-    grid-template-columns: 3fr 1.55fr;
+    grid-template-columns: 3fr 1.25fr;
     overflow: hidden;
     min-height: 0; height: 100%;
   }
@@ -296,27 +296,27 @@
   .ar-none { font-size: 11px; color: #666; letter-spacing: 1px; text-transform: uppercase; }
 
   /* ── FLEET & DRIVER PANEL (Motive) ── */
-  .motive-section { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow: hidden; }
+  .motive-section { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
   .motive-header  { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
   .motive-title   { font-size: 11px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: var(--yellow); }
   .motive-count   { font-size: 10px; color: var(--muted); letter-spacing: 1px; }
   .driver-grid    { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; flex: 1; padding-right: 4px; scrollbar-width: thin; scrollbar-color: #333 transparent; }
-  .driver-card    { background: var(--panel); border-radius: 6px; padding: 9px 12px; border-left: 3px solid var(--border); }
+  .driver-card    { background: var(--panel); border-radius: 6px; padding: 8px 10px; border-left: 3px solid var(--border); }
   .driver-card.s-driving        { border-left-color: var(--green); }
   .driver-card.s-on_duty        { border-left-color: var(--gold); }
   .driver-card.s-sleeper_berth  { border-left-color: #6495ED; }
   .driver-card.s-off_duty       { border-left-color: #444; }
   .driver-row1   { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
-  .driver-name   { font-size: 13px; font-weight: 700; color: var(--white); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .driver-name   { font-size: 12px; font-weight: 700; color: var(--white); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .driver-badge  { font-size: 9px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; white-space: nowrap; flex-shrink: 0; }
   .driver-badge.s-driving        { background: rgba(46,204,113,0.15); color: var(--green); }
   .driver-badge.s-on_duty        { background: rgba(255,186,0,0.15);  color: var(--gold); }
   .driver-badge.s-sleeper_berth  { background: rgba(100,149,237,0.15); color: #6495ED; }
   .driver-badge.s-off_duty       { background: rgba(80,80,80,0.2); color: #888; }
-  .driver-row2   { display: flex; align-items: center; gap: 12px; }
-  .driver-hos    { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .driver-row2   { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 12px; }
+  .driver-hos    { font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .driver-hos strong { color: var(--white); }
-  .driver-loc    { font-size: 11px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .driver-loc    { font-size: 10px; color: #9a9a9a; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 0 0 100%; }
   .driver-truck  { font-size: 10px; color: #aaa; background: rgba(255,255,255,0.07); border-radius: 4px; padding: 1px 5px; flex-shrink: 0; }
   .motive-empty  { font-size: 11px; color: #555; letter-spacing: 1px; text-transform: uppercase; }
   .motive-err    { font-size: 10px; color: #e74c3c; }
@@ -454,7 +454,9 @@
     /* Hide Miles, Dispatcher, Driver on mobile — keep Load #, Origin, Dest, Revenue, Status */
     .loads-tbl th:nth-child(4), .loads-tbl td:nth-child(4),
     .loads-tbl th:nth-child(6), .loads-tbl td:nth-child(6),
-    .loads-tbl th:nth-child(7), .loads-tbl td:nth-child(7) {
+    .loads-tbl th:nth-child(7), .loads-tbl td:nth-child(7),
+   .loads-tbl th:nth-child(9), .loads-tbl td:nth-child(9),
+   .loads-tbl th:nth-child(10), .loads-tbl td:nth-child(10) {
       display: none !important;
     }
     table.loads-tbl thead th { padding: 6px 10px !important; font-size: 9px  !important; }
@@ -577,11 +579,13 @@
                   <th>Revenue</th>
                   <th>Dispatcher</th>
                   <th>Driver</th>
+                 <th>Truck</th>th>
+                 <th>Trailer</th>th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody id="loads-tbody">
-                <tr><td colspan="9" class="no-loads">Loading...</td></tr>
+                <tr><td colspan="11" class="no-loads">Loading...</td>td></tr></tr>
               </tbody>
             </table>
           </div>
@@ -844,11 +848,13 @@ function renderData(data) {
         <td class="td-rev">${l.revenue ? fmtRev(l.revenue) : '—'}</td>
         <td class="td-agent">${l.agent || '—'}</td>
         <td class="td-driver">${l.driver || '—'}</td>
+        <td class="td-driver">${l.truck || '—'}</td>
+        <td class="td-driver">${l.trailer || '—'}</td>
         <td class="td-status"><span class="${badgeClass(l.status)}">${l.status}</span></td>
       </tr>
     `).join('');
   } else {
-    tbody.innerHTML = '<tr><td colspan="9" class="no-loads">No active loads at this time</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="no-loads">No active loads at this time</td></tr>';
   }
   setupScroll();
 
