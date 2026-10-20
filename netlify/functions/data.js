@@ -207,7 +207,7 @@ async function fetchLoads() {
                                                              const miles = l.CustomerMileage?.Distance?.Value ?? 0;
                                     const revenue = l.CustomerRate?.Amount ?? 0;
                                     totalMiles += miles;
-                                    totalRevenue += revenue;
+                                    if (l.Status === "In Transit") totalRevenue += revenue; // only loads already moving count as active revenue
 
                                                              const loadNumber = l.LoadNumber ?? l.Id;
                                     return {
