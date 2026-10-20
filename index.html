@@ -526,6 +526,7 @@
     <div class="fuel-lbl" id="maint-label">MTD Maintenance</div>
     <div class="fuel-val" id="maint-val">$--</div>
     <div class="fuel-unit" id="maint-unit">Motive, month to date</div>
+    <div class="fuel-unit" id="maint-last" style="font-size:10px;opacity:0.75"></div>
      </div>
   </div>
 
@@ -810,6 +811,7 @@ function renderData(data) {
   document.getElementById('maint-val').textContent = isCurrent ? '$' + Number(mm.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '$--';
   const asOf = new Date(mm.asOf + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   document.getElementById('maint-unit').textContent = isCurrent ? 'Motive, as of ' + asOf : 'awaiting update from Motive';
+  const lm = data.last_month_maintenance; const lmEl = document.getElementById('maint-last'); if (lmEl) { lmEl.textContent = (lm && lm.amount != null) ? 'Last month (' + new Date(lm.month + '-15T12:00:00').toLocaleString('en-US', { month: 'long' }) + '): $' + Number(lm.amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ''; }
  }
  
  // MTD revenue
