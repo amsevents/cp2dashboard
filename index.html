@@ -554,7 +554,7 @@
           <div class="tile-sub">miles</div>
         </div>
         <div class="tile">
-          <div class="tile-lbl">Total Revenue (Active)</div>
+          <div class="tile-lbl">Total Revenue (In Transit)</div>
           <div class="tile-val" id="tile-revenue">$--</div>
           <div class="tile-sub">in motion</div>
         </div>
@@ -828,7 +828,7 @@ function renderData(data) {
   // Tiles
   document.getElementById('tile-count').textContent   = data.load_count ?? '--';
   document.getElementById('tile-miles').textContent   = data.total_miles   ? fmt(data.total_miles)   : '--';
-  document.getElementById('tile-revenue').textContent = data.total_revenue ? fmtRev(data.total_revenue) : '$--';
+  document.getElementById('tile-revenue').textContent = data.total_revenue != null ? fmtRev(data.total_revenue) : '$--';
 
   if (data.last_updated) {
     document.getElementById('updated-lbl').textContent = `Updated: ${data.last_updated}`;
