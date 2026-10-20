@@ -663,7 +663,10 @@ function setupScroll() {
   const viewport = document.getElementById('table-viewport');
   scroller.style.transform = 'translateY(0)';
 
-  const bodyRows  = document.querySelectorAll('#loads-tbody tr');
+  // Undo any whole-row snapping from the previous refresh before measuring again.
+ viewport.style.flex = '';
+ viewport.style.height = '';
+ const bodyRows  = document.querySelectorAll('#loads-tbody tr');
    const totalRows = bodyRows.length;
    // Measure the real row and header heights instead of assuming 42px. Rows are
    // taller whenever a cell wraps, and the old fixed guess made the page think
@@ -673,6 +676,10 @@ function setupScroll() {
    const visRows   = Math.max(1, Math.floor((viewport.clientHeight - headH) / rowH));
 
   if (totalRows <= visRows) return;
+
+ // Snap the table window to whole rows so no half-cut row sits at the bottom between scrolls.
+ viewport.style.flex = 'none';
+ viewport.style.height = (headH + visRows * rowH) + 'px';
 
   scrollInterval = setInterval(() => {
     scrollPos += rowH;
