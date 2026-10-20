@@ -206,7 +206,7 @@ async function fetchLoads() {
 
                                                              const miles = l.CustomerMileage?.Distance?.Value ?? 0;
                                     const revenue = l.CustomerRate?.Amount ?? 0;
-                                    totalMiles += miles;
+                                    if (l.Status === "In Transit") totalMiles += miles;
                                     if (l.Status === "In Transit") totalRevenue += revenue; // only loads already moving count as active revenue
 
                                                              const loadNumber = l.LoadNumber ?? l.Id;
@@ -234,7 +234,7 @@ async function fetchLoads() {
 
             return {
                           loads,
-                          loadCount: loads.length,
+                          loadCount: loads.filter((x) => x.status === "In Transit").length,
                           totalMiles,
                           totalRevenue,
                           error: dispatcherError,
