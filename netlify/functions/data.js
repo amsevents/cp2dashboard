@@ -22,6 +22,7 @@ const EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/";
 // and updated here by hand. The dashboard shows it as "as of" asOf, and hides it
 // if the month rolls over before this is updated.
 const MTD_MAINTENANCE = { month: "2026-10", amount: 1825.07, asOf: "2026-10-20" };
+const LAST_MONTH_MAINTENANCE = { month: "2026-09", amount: 16668.15 };
 
 const FSC_MATRIX = [
           [3.20, 3.29, 0.00], [3.30, 3.39, 0.02], [3.40, 3.49, 0.03], [3.50, 3.59, 0.06],
@@ -430,6 +431,7 @@ export default async function handler(request, context) {
             mtd_revenue: mtdResult.total,
             mtd_label: mtdResult.label,
             mtd_maintenance: MTD_MAINTENANCE,
+            last_month_maintenance: LAST_MONTH_MAINTENANCE,
               last_updated: now.toLocaleDateString("en-US", { timeZone: "America/Chicago" }) + " " +
                             now.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", hour12: true }),
               errors,
