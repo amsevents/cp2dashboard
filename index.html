@@ -170,7 +170,7 @@
     background: var(--dark);
     font-size: 10px; font-weight: 700; letter-spacing: 2px;
     text-transform: uppercase; color: var(--muted);
-    padding: 7px 18px; text-align: left;
+    padding: 7px 12px; text-align: left;
     border-bottom: 1px solid var(--border); z-index: 10;
   }
   table.loads-tbl thead th:last-child { text-align: center; }
@@ -178,14 +178,14 @@
     border-bottom: 1px solid #252525; transition: background 0.2s;
   }
   table.loads-tbl tbody tr:hover { background: #1e1e1e; }
-  table.loads-tbl tbody td { padding: 10px 18px; font-size: 18px; font-weight: 500; }
+  table.loads-tbl tbody td { padding: 9px 12px; font-size: 16px; font-weight: 500; }
   .td-id   { color: var(--muted); font-size: 14px; font-weight: 400; white-space: nowrap; }
-  .td-route{ color: var(--white); font-weight: 700; }
+  .td-route{ color: var(--white); font-weight: 700; white-space: nowrap; }
   .td-arrow{ color: var(--yellow); margin: 0 8px; }
-  .td-miles{ color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; }
-  .td-rev  { color: var(--yellow); font-weight: 900; font-variant-numeric: tabular-nums; font-size: 20px; }
-  .td-agent{ color: #d0d0d0; font-size: 15px; font-weight: 500; white-space: nowrap; }
-  .td-driver{ color: #b0b0b0; font-size: 15px; font-weight: 400; white-space: nowrap; }
+  .td-miles{ color: var(--gold); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .td-rev  { color: var(--yellow); font-weight: 900; font-variant-numeric: tabular-nums; font-size: 18px; white-space: nowrap; }
+  .td-agent{ color: #d0d0d0; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .td-driver{ color: #b0b0b0; font-size: 14px; font-weight: 400; white-space: nowrap; }
   .td-status{ text-align: center; }
   .badge {
     display: inline-block; padding: 3px 11px; border-radius: 20px;
@@ -663,9 +663,14 @@ function setupScroll() {
   const viewport = document.getElementById('table-viewport');
   scroller.style.transform = 'translateY(0)';
 
-  const rowH      = 42;
-  const visRows   = Math.floor(viewport.clientHeight / rowH);
-  const totalRows = document.querySelectorAll('#loads-tbody tr').length;
+  const bodyRows  = document.querySelectorAll('#loads-tbody tr');
+   const totalRows = bodyRows.length;
+   // Measure the real row and header heights instead of assuming 42px. Rows are
+   // taller whenever a cell wraps, and the old fixed guess made the page think
+   // every load fit, so the bottom loads were cut off and never scrolled into view.
+   const rowH      = totalRows ? bodyRows[0].getBoundingClientRect().height : 42;
+   const headH     = document.querySelector('table.loads-tbl thead').getBoundingClientRect().height;
+   const visRows   = Math.max(1, Math.floor((viewport.clientHeight - headH) / rowH));
 
   if (totalRows <= visRows) return;
 
