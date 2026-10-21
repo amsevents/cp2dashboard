@@ -218,11 +218,20 @@ async function fetchLoads() {
                                                     revenue,
                                                     agent: "—",
                                                     driver: "—",
-                                                    status: l.Status ?? "—",
+                                                    delivery: l.ScheduledDeliveryAt || null,
+                                              status: l.Status ?? "—",
                                     };
                       });
 
-            const { names: dispatcherNames, drivers: driverNames, trucks: truckNums, trailers: trailerNums, error: dispatcherError } =
+            // Soonest delivery first; loads with no delivery date go to the bottom.
+                    parsedLoads.sort((a, b) => {
+                              const ta = a.delivery ? new Date(a.delivery).getTime() : Infinity;
+                              const tb = b.delivery ? new Date(b.delivery).getTime() : Infinity;
+                              if (ta === tb) return 0;
+                              return ta < tb ? -1 : 1;
+                    });
+                    
+                    const { names: dispatcherNames, drivers: driverNames, trucks: truckNums, trailers: trailerNums, error: dispatcherError } =
                           await fetchDispatcherNames(parsedLoads.map((l) => l.id));
                       const loads = parsedLoads.map((l) => ({
                                     ...l,
