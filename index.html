@@ -157,7 +157,9 @@
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--green); animation: pulse 1.8s infinite;
   }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .avg-rpm { font-size: 11px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; white-space: nowrap; }
+ .avg-rpm span { color: var(--yellow); font-size: 15px; letter-spacing: 1px; margin-left: 6px; }
+ @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
   .table-viewport { flex: 1; overflow: hidden; position: relative; }
   .table-scroller {
@@ -837,7 +839,28 @@ function renderData(data) {
     document.getElementById('fsc-rate').textContent = '$' + data.fsc_rate.toFixed(2);
   }
 
-  // Tiles
+  // Average rate per mile across the loads listed in the table (total revenue / total miles).
+ const rpmHdr = document.querySelector('.section-header');
+ let rpmEl = document.getElementById('avg-rpm');
+ if (!rpmEl && rpmHdr) {
+  rpmEl = document.createElement('div');
+  rpmEl.id = 'avg-rpm';
+  rpmEl.className = 'avg-rpm';
+  rpmHdr.insertBefore(rpmEl, rpmHdr.querySelector('.live-badge'));
+ }
+ if (rpmEl) {
+  const rpmLoads = (data.loads || []).filter((l) => l.miles > 0);
+  const rpmMiles = rpmLoads.reduce((s, l) => s + l.miles, 0);
+  const rpmRev = rpmLoads.reduce((s, l) => s + (l.revenue || 0), 0);
+  rpmEl.textContent = rpmMiles ? 'Avg rate / mile' : '';
+  if (rpmMiles) {
+   const rpmVal = document.createElement('span');
+   rpmVal.textContent = '$' + (rpmRev / rpmMiles).toFixed(2);
+   rpmEl.appendChild(rpmVal);
+  }
+ }
+ 
+ // Tiles
   document.getElementById('tile-count').textContent   = data.load_count ?? '--';
   document.getElementById('tile-miles').textContent   = data.total_miles   ? fmt(data.total_miles)   : '--';
   document.getElementById('tile-revenue').textContent = data.total_revenue != null ? fmtRev(data.total_revenue) : '$--';
