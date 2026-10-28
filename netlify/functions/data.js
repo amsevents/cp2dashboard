@@ -21,7 +21,7 @@ const EIA_URL = "https://api.eia.gov/v2/petroleum/pri/gnd/data/";
 // from Motive's report (Analytics > Reports > Maintenance history detail, this month)
 // and updated here by hand. The dashboard shows it as "as of" asOf, and hides it
 // if the month rolls over before this is updated.
-const MTD_MAINTENANCE = { month: "2026-10", amount: 4094.83, asOf: "2026-10-27" };
+const MTD_MAINTENANCE = { month: "2026-10", amount: 4094.83, asOf: "2026-10-28" };
 const LAST_MONTH_MAINTENANCE = { month: "2026-09", amount: 16668.15 };
 
 const FSC_MATRIX = [
