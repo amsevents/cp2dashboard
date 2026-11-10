@@ -410,7 +410,38 @@ async function fetchMtdRevenue() {
             }
 }
 
+async function fetchDispatcherProbe() {
+            try {
+                          const now = Date.now();
+                          const range = { Start: new Date(now - 30 * 86400000).toISOString(), End: new Date(now + 45 * 86400000).toISOString() };
+                          const statuses = ["Open", "Reserved", "Covered", "Dispatched", "In Transit", "Delivered", "Invoiced", "Completed", "Quoted", "Released", "TONU", "Queued", "Financed", "Paid"];
+                          const [tripsData, usersData] = await Promise.all([
+                                          alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: 0, PageSize: 200, Status: statuses, DeliveryDateRange: range }),
+                                          alvysGet(ALVYS_ENDPOINTS.usersList),
+                                        ]);
+                          const trips = tripsData.Items || tripsData.items || [];
+                          const users = usersData.Items || usersData.items || (Array.isArray(usersData) ? usersData : []);
+                          const nameById = {};
+                          for (const u of users) nameById[u.Id ?? u.id] = u.Name ?? u.name;
+                          const derreckUsers = users.filter((u) => /derr|landon/i.test(String(u.Name ?? u.name ?? ""))).map((u) => ({ id: u.Id ?? u.id, name: u.Name ?? u.name, role: u.Role ?? u.role, type: u.UserType ?? u.userType, status: u.Status ?? u.status }));
+                          const byDispatcher = {};
+                          const derreckTrips = [];
+                          for (const t of trips) {
+                                          const dn = nameById[t.DispatcherId] || (t.DispatcherId ? "unknown:" + t.DispatcherId : "none");
+                                          const key = dn + " | " + t.Status;
+                                          byDispatcher[key] = (byDispatcher[key] || 0) + 1;
+                                          if (/derr|landon/i.test(dn)) derreckTrips.push({ load: t.LoadNumber, trip: t.TripNumber, status: t.Status, delivery: t.DeliveryDate, driver: !!(t.Driver1 && t.Driver1.Id), carrier: !!(t.Carrier && t.Carrier.Id) });
+                          }
+                          return { totalTrips: trips.length, totalReported: tripsData.Total, derreckUsers, derreckTrips, byDispatcher };
+            } catch (e) {
+                          return { error: e.message };
+            }
+}
+
 export default async function handler(request, context) {
+          if (new URL(request.url).searchParams.get("debug") === "dprobe") {
+                    return new Response(JSON.stringify(await fetchDispatcherProbe()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+          }
           const errors = [];
 
   const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
