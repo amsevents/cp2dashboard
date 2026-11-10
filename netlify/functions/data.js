@@ -410,7 +410,44 @@ async function fetchMtdRevenue() {
             }
 }
 
+async function fetchLoadProbe() {
+            try {
+                          const [loadsData, tripsData, usersData] = await Promise.all([
+                                          alvysPost(ALVYS_ENDPOINTS.loadsSearch, { Page: 0, PageSize: 200, Status: ["Dispatched", "In Transit"] }),
+                                          alvysPost(ALVYS_ENDPOINTS.tripsSearch, { Page: 0, PageSize: 50, LoadNumbers: ["1000529", "1000525"] }),
+                                          alvysGet(ALVYS_ENDPOINTS.usersList),
+                                        ]);
+                          const users = usersData.Items || usersData.items || (Array.isArray(usersData) ? usersData : []);
+                          const nameById = {};
+                          for (const u of users) nameById[u.Id ?? u.id] = u.Name ?? u.name;
+                          const scan = (obj, path, out) => {
+                                          if (obj && typeof obj === "object") {
+                                                            for (const [k, v] of Object.entries(obj)) scan(v, path + "." + k, out);
+                                          } else if (typeof obj === "string" && nameById[obj]) {
+                                                            out.push(path + " = " + nameById[obj]);
+                                          }
+                          };
+                          const result = { loads: [], trips: [] };
+                          for (const l of (loadsData.Items || []).filter((x) => ["1000529", "1000525"].includes(String(x.LoadNumber)))) {
+                                          const out = [];
+                                          scan(l, "load", out);
+                                          result.loads.push({ load: l.LoadNumber, status: l.Status, userRefs: out, topKeys: Object.keys(l) });
+                          }
+                          for (const t of (tripsData.Items || [])) {
+                                          const out = [];
+                                          scan(t, "trip", out);
+                                          result.trips.push({ load: t.LoadNumber, trip: t.TripNumber, status: t.Status, userRefs: out, topKeys: Object.keys(t) });
+                          }
+                          return result;
+            } catch (e) {
+                          return { error: e.message };
+            }
+}
+
 export default async function handler(request, context) {
+          if (new URL(request.url).searchParams.get("debug") === "lprobe") {
+                    return new Response(JSON.stringify(await fetchLoadProbe()), { headers: { "Content-Type": "application/json", "Cache-Control": "no-store" } });
+          }
           const errors = [];
 
   const [loadsResult, dieselResult, motiveResult, mtdResult] = await Promise.all([
